@@ -366,6 +366,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this._rendered = false;
+    this._activeTab = 'config';
   }
 
   setConfig(config) {
@@ -610,72 +611,25 @@ class LuminaEnergyCardEditor extends HTMLElement {
     return container;
   }
 
-  render() {
-    if (!this._hass || !this._config) {
-      return;
+  _onTabChanged(ev, tabs) {
+    const target = ev.target;
+    const index = target && Number.isFinite(target.selected) ? target.selected : 0;
+    const clampedIndex = Math.min(Math.max(index, 0), tabs.length - 1);
+    const selectedTab = tabs[clampedIndex];
+    if (selectedTab && selectedTab.id !== this._activeTab) {
+      this._activeTab = selectedTab.id;
+      this._rendered = false;
+      this.render();
     }
+  }
 
-    const config = this._config;
-
-    this.shadowRoot.innerHTML = '';
-
-    const style = document.createElement('style');
-    style.textContent = `
-      .card-config {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 16px;
-      }
-      .section-title {
-        font-weight: bold;
-        font-size: 1.1em;
-        margin-top: 16px;
-        margin-bottom: 8px;
-        color: var(--primary-color);
-        border-bottom: 1px solid var(--divider-color);
-        padding-bottom: 4px;
-      }
-      ha-textfield {
-        width: 100%;
-      }
-      ha-select {
-        width: 100%;
-      }
-      ha-switch {
-        padding: 16px 0;
-      }
-      .helper-text {
-        font-size: 0.9em;
-        color: var(--secondary-text-color);
-        margin-top: -8px;
-        margin-bottom: 8px;
-      }
-      .switch-container {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 0;
-      }
-      .slider-container {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 8px 0;
-      }
-      .slider-label {
-        font-size: 0.95em;
-        font-weight: 500;
-        color: var(--primary-text-color);
-      }
-    `;
-
+  _buildConfigContent(config) {
     const container = document.createElement('div');
     container.className = 'card-config';
 
     const cardSettingsTitle = document.createElement('div');
     cardSettingsTitle.className = 'section-title';
-    cardSettingsTitle.textContent = 'Card Settings';
+    cardSettingsTitle.textContent = 'Configuration';
     container.appendChild(cardSettingsTitle);
 
     container.appendChild(this._createTextField('Card Title', 'card_title', config.card_title || 'LUMINA ENERGY'));
@@ -698,22 +652,6 @@ class LuminaEnergyCardEditor extends HTMLElement {
     ]));
 
     container.appendChild(this._createSlider('Update Interval', 'update_interval', config.update_interval ?? 30, 10, 60, 10, 'seconds'));
-
-    const typographyTitle = document.createElement('div');
-    typographyTitle.className = 'section-title';
-    typographyTitle.textContent = 'Typography';
-    container.appendChild(typographyTitle);
-
-    container.appendChild(this._createSlider('Header Font Size', 'header_font_size', config.header_font_size ?? 16, 12, 32, 1, 'px'));
-    container.appendChild(this._createSlider('Daily Label Font Size', 'daily_label_font_size', config.daily_label_font_size ?? 12, 8, 24, 1, 'px'));
-    container.appendChild(this._createSlider('Daily Value Font Size', 'daily_value_font_size', config.daily_value_font_size ?? 20, 12, 32, 1, 'px'));
-    container.appendChild(this._createSlider('PV Text Font Size', 'pv_font_size', config.pv_font_size ?? 16, 12, 28, 1, 'px'));
-    container.appendChild(this._createSlider('Battery SOC Font Size', 'battery_soc_font_size', config.battery_soc_font_size ?? 20, 12, 32, 1, 'px'));
-    container.appendChild(this._createSlider('Battery Power Font Size', 'battery_power_font_size', config.battery_power_font_size ?? 14, 10, 28, 1, 'px'));
-    container.appendChild(this._createSlider('Load Font Size', 'load_font_size', config.load_font_size ?? 15, 10, 28, 1, 'px'));
-    container.appendChild(this._createSlider('Grid Font Size', 'grid_font_size', config.grid_font_size ?? 15, 10, 28, 1, 'px'));
-    container.appendChild(this._createSlider('Car Power Font Size', 'car_power_font_size', config.car_power_font_size ?? 15, 10, 28, 1, 'px'));
-    container.appendChild(this._createSlider('Car SOC Font Size', 'car_soc_font_size', config.car_soc_font_size ?? 12, 8, 24, 1, 'px'));
 
     const animationTitle = document.createElement('div');
     animationTitle.className = 'section-title';
@@ -818,8 +756,143 @@ class LuminaEnergyCardEditor extends HTMLElement {
     container.appendChild(this._createSwitch('Show Car SOC', 'show_car_soc', config.show_car_soc));
     container.appendChild(this._createTextField('Car SOC Color', 'car_pct_color', config.car_pct_color || '#00FFFF'));
 
+    return container;
+  }
+
+  _buildTypographyContent(config) {
+    const container = document.createElement('div');
+    container.className = 'card-config';
+
+    const typographyTitle = document.createElement('div');
+    typographyTitle.className = 'section-title';
+    typographyTitle.textContent = 'Typography';
+    container.appendChild(typographyTitle);
+
+    container.appendChild(this._createSlider('Header Font Size', 'header_font_size', config.header_font_size ?? 16, 12, 32, 1, 'px'));
+    container.appendChild(this._createSlider('Daily Label Font Size', 'daily_label_font_size', config.daily_label_font_size ?? 12, 8, 24, 1, 'px'));
+    container.appendChild(this._createSlider('Daily Value Font Size', 'daily_value_font_size', config.daily_value_font_size ?? 20, 12, 32, 1, 'px'));
+    container.appendChild(this._createSlider('PV Text Font Size', 'pv_font_size', config.pv_font_size ?? 16, 12, 28, 1, 'px'));
+    container.appendChild(this._createSlider('Battery SOC Font Size', 'battery_soc_font_size', config.battery_soc_font_size ?? 20, 12, 32, 1, 'px'));
+    container.appendChild(this._createSlider('Battery Power Font Size', 'battery_power_font_size', config.battery_power_font_size ?? 14, 10, 28, 1, 'px'));
+    container.appendChild(this._createSlider('Load Font Size', 'load_font_size', config.load_font_size ?? 15, 10, 28, 1, 'px'));
+    container.appendChild(this._createSlider('Grid Font Size', 'grid_font_size', config.grid_font_size ?? 15, 10, 28, 1, 'px'));
+    container.appendChild(this._createSlider('Car Power Font Size', 'car_power_font_size', config.car_power_font_size ?? 15, 10, 28, 1, 'px'));
+    container.appendChild(this._createSlider('Car SOC Font Size', 'car_soc_font_size', config.car_soc_font_size ?? 12, 8, 24, 1, 'px'));
+
+    return container;
+  }
+
+  render() {
+    if (!this._hass || !this._config) {
+      return;
+    }
+
+    const config = this._config;
+
+    this.shadowRoot.innerHTML = '';
+
+    const style = document.createElement('style');
+    style.textContent = `
+      .tabs-container {
+        margin-bottom: 8px;
+      }
+      ha-tabs {
+        margin: 0 16px;
+        --paper-tabs-selection-bar-color: var(--primary-color);
+      }
+      paper-tab {
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .card-config {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+      }
+      .section-title {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-top: 16px;
+        margin-bottom: 8px;
+        color: var(--primary-color);
+        border-bottom: 1px solid var(--divider-color);
+        padding-bottom: 4px;
+      }
+      ha-textfield {
+        width: 100%;
+      }
+      ha-select {
+        width: 100%;
+      }
+      ha-switch {
+        padding: 16px 0;
+      }
+      .helper-text {
+        font-size: 0.9em;
+        color: var(--secondary-text-color);
+        margin-top: -8px;
+        margin-bottom: 8px;
+      }
+      .switch-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+      }
+      .slider-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 0;
+      }
+      .slider-label {
+        font-size: 0.95em;
+        font-weight: 500;
+        color: var(--primary-text-color);
+      }
+    `;
+
+    const lang = (config.language || 'en').toLowerCase();
+    const tabLabels = {
+      config: { en: 'Configuration', it: 'Configurazione', de: 'Konfiguration' },
+      typography: { en: 'Typography', it: 'Tipografia', de: 'Typografie' }
+    };
+
+    const resolveLabel = (key) => {
+      const entry = tabLabels[key];
+      if (!entry) {
+        return key;
+      }
+      return entry[lang] || entry.en;
+    };
+
+    const tabs = [
+      { id: 'config', label: resolveLabel('config') },
+      { id: 'typography', label: resolveLabel('typography') }
+    ];
+
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'tabs-container';
+    const tabsEl = document.createElement('ha-tabs');
+    tabsEl.selected = Math.max(0, tabs.findIndex((tab) => tab.id === this._activeTab));
+    tabsEl.addEventListener('iron-activate', (ev) => this._onTabChanged(ev, tabs));
+
+    tabs.forEach((tab) => {
+      const tabEl = document.createElement('paper-tab');
+      tabEl.textContent = tab.label;
+      tabsEl.appendChild(tabEl);
+    });
+
+    tabsContainer.appendChild(tabsEl);
+
+    const activeContent = this._activeTab === 'typography'
+      ? this._buildTypographyContent(config)
+      : this._buildConfigContent(config);
+
     this.shadowRoot.appendChild(style);
-    this.shadowRoot.appendChild(container);
+    this.shadowRoot.appendChild(tabsContainer);
+    this.shadowRoot.appendChild(activeContent);
     this._rendered = true;
   }
 }
