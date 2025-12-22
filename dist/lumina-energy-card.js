@@ -1,7 +1,7 @@
 /**
  * Lumina Energy Card
  * Custom Home Assistant card for energy flow visualization
- * Version: 1.1.20
+ * Version: 1.1.24
  * Tested with Home Assistant 2025.12+
  */
 const BATTERY_GEOMETRY = { X: 260, Y_BASE: 350, WIDTH: 55, MAX_HEIGHT: 84 };
@@ -9,8 +9,7 @@ const TEXT_POSITIONS = {
   solar: { x: 177, y: 320, rotate: -16, skewX: -20, skewY: 0 },
   battery: { x: 245, y: 375, rotate: -25, skewX: -25, skewY: 5 },
   home: { x: 460, y: 245, rotate: -20, skewX: -20, skewY: 3 },
-  grid: { x: 580, y: 90, rotate: -8, skewX: -10, skewY: 0 },
-  car: { x: 590, y: 305, rotate: 16, skewX: 20, skewY: 0 }
+  grid: { x: 580, y: 90, rotate: -8, skewX: -10, skewY: 0 }
 };
 
 const buildTextTransform = ({ x, y, rotate, skewX, skewY }) =>
@@ -20,8 +19,7 @@ const TEXT_TRANSFORMS = {
   solar: buildTextTransform(TEXT_POSITIONS.solar),
   battery: buildTextTransform(TEXT_POSITIONS.battery),
   home: buildTextTransform(TEXT_POSITIONS.home),
-  grid: buildTextTransform(TEXT_POSITIONS.grid),
-  car: buildTextTransform(TEXT_POSITIONS.car)
+  grid: buildTextTransform(TEXT_POSITIONS.grid)
 };
 
 const FLOW_PATHS = {
@@ -30,7 +28,65 @@ const FLOW_PATHS = {
   bat: 'M 423 310 L 325 350',
   load: 'M 471 303 L 550 273 L 380 220',
   grid: 'M 470 280 L 575 240 L 575 223',
-  car: 'M 475 329 L 490 335 L 600 285'
+  car1: 'M 475 329 L 490 335 L 600 285',
+  car2: 'M 475 341 L 490 347 L 600 310'
+};
+
+const SVG_DIMENSIONS = { width: 800, height: 450 };
+const DEBUG_GRID_SPACING = 50;
+const DEBUG_GRID_MAJOR_SPACING = 100;
+const DEBUG_GRID_MINOR_COLOR = 'rgba(255, 255, 255, 0.25)';
+const DEBUG_GRID_MAJOR_COLOR = 'rgba(255, 255, 255, 0.45)';
+const DEBUG_GRID_TEXT_COLOR = 'rgba(255, 255, 255, 0.65)';
+const DEBUG_GRID_CONTENT = (() => {
+  const parts = [];
+  for (let x = 0; x <= SVG_DIMENSIONS.width; x += DEBUG_GRID_SPACING) {
+    const isMajor = x % DEBUG_GRID_MAJOR_SPACING === 0;
+    const stroke = isMajor ? DEBUG_GRID_MAJOR_COLOR : DEBUG_GRID_MINOR_COLOR;
+    const strokeWidth = isMajor ? 1.5 : 0.75;
+    parts.push(`<line x1="${x}" y1="0" x2="${x}" y2="${SVG_DIMENSIONS.height}" stroke="${stroke}" stroke-width="${strokeWidth}" />`);
+    if (isMajor) {
+      parts.push(`<text x="${x + 4}" y="12" fill="${DEBUG_GRID_TEXT_COLOR}" font-size="10" text-anchor="start">X${x}</text>`);
+    }
+  }
+  for (let y = 0; y <= SVG_DIMENSIONS.height; y += DEBUG_GRID_SPACING) {
+    const isMajor = y % DEBUG_GRID_MAJOR_SPACING === 0;
+    const stroke = isMajor ? DEBUG_GRID_MAJOR_COLOR : DEBUG_GRID_MINOR_COLOR;
+    const strokeWidth = isMajor ? 1.5 : 0.75;
+    parts.push(`<line x1="0" y1="${y}" x2="${SVG_DIMENSIONS.width}" y2="${y}" stroke="${stroke}" stroke-width="${strokeWidth}" />`);
+    if (isMajor) {
+      parts.push(`<text x="4" y="${y - 4}" fill="${DEBUG_GRID_TEXT_COLOR}" font-size="10" text-anchor="start">Y${y}</text>`);
+    }
+  }
+  parts.push(`<text x="${SVG_DIMENSIONS.width - 160}" y="${SVG_DIMENSIONS.height - 8}" fill="${DEBUG_GRID_TEXT_COLOR}" font-size="11" text-anchor="start">Z axis points toward the viewer</text>`);
+  return parts.join('');
+})();
+
+// Enable/disable debug grid overlay for development (set true to show grid)
+const DEBUG_GRID_ENABLED = false;
+
+const CAR_TEXT_BASE = { x: 590, rotate: 16, skewX: 20, skewY: 0 };
+const CAR_LAYOUTS = {
+  single: {
+    car1: { x: 590, labelY: 282, powerY: 300, socY: 316, path: 'M 475 329 L 490 335 L 600 285' },
+    car2: { x: 590, labelY: 318, powerY: 336, socY: 352, path: 'M 475 341 L 490 347 L 600 310' }
+  },
+  dual: {
+    car1: { x: 580, labelY: 272, powerY: 290, socY: 306, path: 'M 475 329 L 490 335 L 600 285' },
+    car2: { x: 639, labelY: 291, powerY: 308, socY: 323, path: 'M 464 320 L 570 357 L 650 310' }
+  }
+};
+
+const buildCarTextTransforms = (entry) => {
+  const base = { ...CAR_TEXT_BASE };
+  if (typeof entry.x === 'number') {
+    base.x = entry.x;
+  }
+  return {
+    label: buildTextTransform({ ...base, y: entry.labelY }),
+    power: buildTextTransform({ ...base, y: entry.powerY }),
+    soc: buildTextTransform({ ...base, y: entry.socY })
+  };
 };
 
 const BATTERY_TRANSFORM = `translate(${BATTERY_GEOMETRY.X}, ${BATTERY_GEOMETRY.Y_BASE}) rotate(-6) skewX(-4) skewY(30) translate(-${BATTERY_GEOMETRY.X}, -${BATTERY_GEOMETRY.Y_BASE})`;
@@ -92,7 +148,7 @@ class LuminaEnergyCard extends HTMLElement {
     this.config = { ...defaults, ...config };
     this._forceRender = true;
     this._prevViewState = null;
-    this.render();
+
   }
 
   set hass(hass) {
@@ -137,20 +193,39 @@ class LuminaEnergyCard extends HTMLElement {
       grid_font_size: 15,
       car_power_font_size: 15,
       car_soc_font_size: 12,
+      car2_power_font_size: 15,
+      car2_soc_font_size: 12,
+        car_name_font_size: 15, // Schriftgroesse Fahrzeugname (px)
+        car2_name_font_size: 15, // Schriftgroesse Fahrzeugname 2 (px)
       animation_speed_factor: 1,
       animation_style: 'dashes',
-      sensor_pv_total: '',
+            sensor_pv_total: '',
+          sensor_pv_total_secondary: '',
       sensor_pv1: '',
       sensor_daily: '',
+      sensor_daily_array2: '',
       sensor_bat1_soc: '',
       sensor_bat1_power: '',
       sensor_home_load: '',
+      sensor_home_load_secondary: '',
       sensor_grid_power: '',
       sensor_grid_import: '',
       sensor_grid_export: '',
+      sensor_car2_power: '',
+      sensor_car2_soc: '',
       pv_primary_color: '#0080ff',
+      pv_tot_color: '#00FFFF',
       pv_secondary_color: '#80ffff',
+      pv_string1_color: '#80ffff',
+      pv_string2_color: '#80ffff',
+      pv_string3_color: '#80ffff',
+      pv_string4_color: '#80ffff',
+      pv_string5_color: '#80ffff',
+      pv_string6_color: '#80ffff',
       load_flow_color: '#0080ff',
+      house_total_color: '#00FFFF',
+      inv1_color: '#0080ff',
+      inv2_color: '#80ffff',
       load_threshold_warning: null,
       load_warning_color: '#ff8000',
       load_threshold_critical: null,
@@ -160,6 +235,13 @@ class LuminaEnergyCard extends HTMLElement {
       grid_import_color: '#FF3333',
       grid_export_color: '#00ff00',
       car_flow_color: '#00FFFF',
+      car1_color: '#FFFFFF',
+      car2_color: '#FFFFFF',
+      car1_name_color: '#FFFFFF',
+      car2_name_color: '#FFFFFF',
+      car2_pct_color: '',
+      show_car2: false,
+      invert_battery: false,
       battery_fill_high_color: DEFAULT_BATTERY_FILL_HIGH_COLOR,
       battery_fill_low_color: DEFAULT_BATTERY_FILL_LOW_COLOR,
       battery_fill_low_threshold: DEFAULT_BATTERY_LOW_THRESHOLD,
@@ -702,7 +784,11 @@ class LuminaEnergyCard extends HTMLElement {
     const point = entry.element.getPointAtLength(distance);
     const ahead = entry.element.getPointAtLength(Math.min(distance + 2, length));
     const angle = Math.atan2(ahead.y - point.y, ahead.x - point.x) * (180 / Math.PI);
-    shape.setAttribute('transform', `translate(${point.x}, ${point.y}) rotate(${angle})`);
+    const directionValue = entry.directionState && Number.isFinite(entry.directionState.value)
+      ? entry.directionState.value
+      : (entry.direction || 1);
+    const flip = directionValue < 0 ? 180 : 0;
+    shape.setAttribute('transform', `translate(${point.x}, ${point.y}) rotate(${angle + flip})`);
   }
 
   _updateFlowMotion(entry) {
@@ -825,9 +911,17 @@ class LuminaEnergyCard extends HTMLElement {
 
     const pvStringValues = pvStringIds.map((sensorId) => this.getStateSafe(sensorId));
     const pvTotalFromStrings = pvStringValues.reduce((acc, value) => acc + value, 0);
-    const total_pv_w = config.sensor_pv_total
-      ? this.getStateSafe(config.sensor_pv_total)
-      : pvTotalFromStrings;
+
+    const pvArray2Ids = [
+      config.sensor_pv_array2_1, config.sensor_pv_array2_2, config.sensor_pv_array2_3,
+      config.sensor_pv_array2_4, config.sensor_pv_array2_5, config.sensor_pv_array2_6
+    ].filter((sensorId) => sensorId && sensorId !== '');
+    const pvArray2Values = pvArray2Ids.map((sensorId) => this.getStateSafe(sensorId));
+    const pvArray2TotalFromStrings = pvArray2Values.reduce((acc, value) => acc + value, 0);
+
+    const pv_primary_w = config.sensor_pv_total ? this.getStateSafe(config.sensor_pv_total) : pvTotalFromStrings;
+    const pv_secondary_w = config.sensor_pv_total_secondary ? this.getStateSafe(config.sensor_pv_total_secondary) : pvArray2TotalFromStrings;
+    const total_pv_w = pv_primary_w + pv_secondary_w;
     const showPvStrings = Boolean(config.show_pv_strings);
 
     // Get battery configs
@@ -945,15 +1039,40 @@ class LuminaEnergyCard extends HTMLElement {
     const loadWarningColor = typeof config.load_warning_color === 'string' && config.load_warning_color ? config.load_warning_color : null;
     const loadCriticalColor = typeof config.load_critical_color === 'string' && config.load_critical_color ? config.load_critical_color : null;
     const gridDirectionSign = gridDirection >= 0 ? 1 : -1;
+    const belowGridActivityThreshold = gridActivityThreshold > 0 && !gridActive;
     const load = this.getStateSafe(config.sensor_home_load);
+    const loadSecondary = config.sensor_home_load_secondary ? this.getStateSafe(config.sensor_home_load_secondary) : 0;
+    const houseTotalLoad = (Number.isFinite(load) ? load : 0) + (Number.isFinite(loadSecondary) ? loadSecondary : 0);
     const loadValue = Number.isFinite(load) ? load : 0;
-    const daily_raw = this.getStateSafe(config.sensor_daily);
-    const total_daily_kwh = (daily_raw / 1000).toFixed(1);
+    const daily1 = config.sensor_daily ? this.getStateSafe(config.sensor_daily) : 0;
+    const daily2 = config.sensor_daily_array2 ? this.getStateSafe(config.sensor_daily_array2) : 0;
+    const total_daily_kwh = ((daily1 + daily2) / 1000).toFixed(1);
 
-    // EV Car
-    const car_w = config.sensor_car_power ? this.getStateSafe(config.sensor_car_power) : 0;
-    const car_soc = config.sensor_car_soc ? this.getStateSafe(config.sensor_car_soc) : null;
-    const showCarInfo = Boolean(config.show_car_soc);
+    // EV Cars
+    const showCar1 = Boolean(config.show_car_soc);
+    const showCar2Toggle = Boolean(config.show_car2);
+    const car2EntitiesConfigured = Boolean(config.sensor_car2_power || config.sensor_car2_soc);
+    const showCar2 = showCar2Toggle && car2EntitiesConfigured;
+    const showDebugGrid = DEBUG_GRID_ENABLED;
+    const resolveLabel = (value, fallback) => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed) {
+          return trimmed;
+        }
+      }
+      return fallback;
+    };
+    const car1Label = resolveLabel(config.car1_label, 'CAR 1');
+    const car2Label = resolveLabel(config.car2_label, 'CAR 2');
+    const car1PowerValue = showCar1 && config.sensor_car_power ? this.getStateSafe(config.sensor_car_power) : 0;
+    const car1SocValue = showCar1 && config.sensor_car_soc ? this.getStateSafe(config.sensor_car_soc) : null;
+    const car2PowerValue = showCar2 && config.sensor_car2_power ? this.getStateSafe(config.sensor_car2_power) : 0;
+    const car2SocValue = showCar2 && config.sensor_car2_soc ? this.getStateSafe(config.sensor_car2_soc) : null;
+    const carLayoutKey = showCar2 ? 'dual' : 'single';
+    const carLayout = CAR_LAYOUTS[carLayoutKey];
+    const car1Transforms = buildCarTextTransforms(carLayout.car1);
+    const car2Transforms = buildCarTextTransforms(carLayout.car2);
 
     // Display settings
     const bg_img = config.background_image || '/local/community/lumina-energy-card/lumina_background.jpg';
@@ -984,6 +1103,10 @@ class LuminaEnergyCard extends HTMLElement {
     const grid_font_size = clampValue(config.grid_font_size, 10, 28, 15);
     const car_power_font_size = clampValue(config.car_power_font_size, 10, 28, 15);
     const car_soc_font_size = clampValue(config.car_soc_font_size, 8, 24, 12);
+    const car2_power_font_size = clampValue(config.car2_power_font_size !== undefined ? config.car2_power_font_size : config.car_power_font_size, 10, 28, car_power_font_size);
+    const car2_soc_font_size = clampValue(config.car2_soc_font_size !== undefined ? config.car2_soc_font_size : config.car_soc_font_size, 8, 24, car_soc_font_size);
+    const car_name_font_size = clampValue(config.car_name_font_size !== undefined ? config.car_name_font_size : config.car_power_font_size, 8, 28, car_power_font_size);
+    const car2_name_font_size = clampValue(config.car2_name_font_size !== undefined ? config.car2_name_font_size : (config.car2_power_font_size !== undefined ? config.car2_power_font_size : config.car_power_font_size), 8, 28, car2_power_font_size);
     const animation_speed_factor = clampValue(config.animation_speed_factor, -3, 3, 1);
     this._animationSpeedFactor = animation_speed_factor;
     const animation_style = this._normalizeAnimationStyle(config.animation_style);
@@ -1004,7 +1127,23 @@ class LuminaEnergyCard extends HTMLElement {
     const C_WHITE = '#FFFFFF';
     const C_RED = '#FF3333';
     const pvPrimaryColor = resolveColor(config.pv_primary_color, C_CYAN);
+    const pvTotColor = resolveColor(config.pv_tot_color, pvPrimaryColor);
     const pvSecondaryColor = resolveColor(config.pv_secondary_color, C_BLUE);
+    const pvStringColorKeys = [
+      'pv_string1_color',
+      'pv_string2_color',
+      'pv_string3_color',
+      'pv_string4_color',
+      'pv_string5_color',
+      'pv_string6_color'
+    ];
+    const getPvStringColor = (index) => {
+      const key = pvStringColorKeys[index];
+      if (!key) {
+        return pvPrimaryColor;
+      }
+      return resolveColor(config[key], pvPrimaryColor);
+    };
     const loadFlowColor = resolveColor(config.load_flow_color, C_CYAN);
     const batteryChargeColor = resolveColor(config.battery_charge_color, C_CYAN);
     const batteryDischargeColor = resolveColor(config.battery_discharge_color, C_WHITE);
@@ -1039,9 +1178,16 @@ class LuminaEnergyCard extends HTMLElement {
       }
       return C_WHITE;
     })();
-    const bat_col = (total_bat_w >= 0) ? batteryChargeColor : batteryDischargeColor;
-    const batteryDirectionSign = total_bat_w >= 0 ? 1 : -1;
-    const base_grid_color = gridDirectionSign >= 0 ? gridImportColor : gridExportColor;
+    const invertBattery = Boolean(config.invert_battery);
+    const isBatPositive = total_bat_w >= 0;
+    const bat_col = isBatPositive
+      ? (invertBattery ? batteryDischargeColor : batteryChargeColor)
+      : (invertBattery ? batteryChargeColor : batteryDischargeColor);
+    let batteryDirectionSign = isBatPositive ? 1 : -1;
+    if (invertBattery) batteryDirectionSign *= -1;
+    const base_grid_color = belowGridActivityThreshold
+      ? gridExportColor
+      : (gridDirectionSign >= 0 ? gridImportColor : gridExportColor);
     const effectiveGridColor = (() => {
       const magnitude = gridMagnitude;
       if (gridCriticalColor && gridCriticalThreshold !== null && magnitude >= gridCriticalThreshold) {
@@ -1054,21 +1200,26 @@ class LuminaEnergyCard extends HTMLElement {
     })();
     const gridAnimationDirection = -gridDirectionSign;
     const liquid_fill = (avg_soc <= batteryLowThreshold) ? batteryFillLowColor : batteryFillHighColor;
-    const show_double_flow = (pvStringValues.length >= 2 && total_pv_w > 10);
+    const show_double_flow = (pv_primary_w > 10 && pv_secondary_w > 10);
     const pvLinesRaw = [];
-    if (showPvStrings) {
-      pvLinesRaw.push({ key: 'pv-total', text: `${label_pv_tot}: ${this.formatPower(total_pv_w, use_kw)}`, fill: pvPrimaryColor });
+    // If Array 2 is producing, show totals only: PV TOT, Array 1 total, Array 2 total
+    if (pv_secondary_w > 10) {
+      pvLinesRaw.push({ key: 'pv-total', text: `${label_pv_tot}: ${this.formatPower(total_pv_w, use_kw)}`, fill: pvTotColor });
+      pvLinesRaw.push({ key: 'pv-primary-total', text: `Array 1: ${this.formatPower(pv_primary_w, use_kw)}`, fill: pvPrimaryColor });
+      pvLinesRaw.push({ key: 'pv-secondary-total', text: `Array 2: ${this.formatPower(pv_secondary_w, use_kw)}`, fill: pvSecondaryColor });
+    } else if (showPvStrings) {
+      pvLinesRaw.push({ key: 'pv-total', text: `${label_pv_tot}: ${this.formatPower(total_pv_w, use_kw)}`, fill: pvTotColor });
       pvStringValues.forEach((value, index) => {
-        const lineColor = index === 0 ? pvPrimaryColor : pvSecondaryColor;
+        const lineColor = getPvStringColor(index);
         pvLinesRaw.push({ key: `pv-string-${index + 1}`, text: `S${index + 1}: ${this.formatPower(value, use_kw)}`, fill: lineColor });
       });
     } else if (pvStringValues.length === 2) {
-      pvLinesRaw.push({ key: 'pv-string-1', text: `S1: ${this.formatPower(pvStringValues[0], use_kw)}`, fill: pvPrimaryColor });
-      pvLinesRaw.push({ key: 'pv-string-2', text: `S2: ${this.formatPower(pvStringValues[1], use_kw)}`, fill: pvSecondaryColor });
+      pvLinesRaw.push({ key: 'pv-string-1', text: `S1: ${this.formatPower(pvStringValues[0], use_kw)}`, fill: getPvStringColor(0) });
+      pvLinesRaw.push({ key: 'pv-string-2', text: `S2: ${this.formatPower(pvStringValues[1], use_kw)}`, fill: getPvStringColor(1) });
     } else if (pvStringValues.length > 2) {
-      pvLinesRaw.push({ key: 'pv-total', text: `${label_pv_tot}: ${this.formatPower(total_pv_w, use_kw)}`, fill: pvPrimaryColor });
+      pvLinesRaw.push({ key: 'pv-total', text: `${label_pv_tot}: ${this.formatPower(total_pv_w, use_kw)}`, fill: pvTotColor });
     } else {
-      pvLinesRaw.push({ key: 'pv-total', text: this.formatPower(total_pv_w, use_kw), fill: pvPrimaryColor });
+      pvLinesRaw.push({ key: 'pv-total', text: this.formatPower(total_pv_w, use_kw), fill: pvTotColor });
     }
 
     const lineCount = Math.min(pvLinesRaw.length, MAX_PV_LINES);
@@ -1087,21 +1238,86 @@ class LuminaEnergyCard extends HTMLElement {
       };
     });
 
+    // Build load display lines when Array 2 is active (include per-line colours)
+    const houseFill = resolveColor(config.house_total_color, C_CYAN);
+    const inv1Fill = resolveColor(config.inv1_color, pvPrimaryColor);
+    const inv2Fill = resolveColor(config.inv2_color, pvSecondaryColor);
+    const loadLines = (pv_secondary_w > 10) ? [
+      { key: 'house-total', text: `HOUSE TOT: ${this.formatPower(houseTotalLoad, use_kw)}`, fill: houseFill },
+      { key: 'inv1-total', text: `INV 1: ${this.formatPower(loadValue, use_kw)}`, fill: inv1Fill },
+      { key: 'inv2-total', text: `INV 2: ${this.formatPower(loadSecondary, use_kw)}`, fill: inv2Fill }
+    ] : null;
+
+    const loadY = (pv_secondary_w > 10) ? (TEXT_POSITIONS.home.y - 28) : TEXT_POSITIONS.home.y;
+
     const flows = {
-      pv1: { stroke: pvPrimaryColor, glowColor: pvPrimaryColor, active: total_pv_w > 10 },
-      pv2: { stroke: pvSecondaryColor, glowColor: pvSecondaryColor, active: show_double_flow },
+      pv1: { stroke: pvPrimaryColor, glowColor: pvPrimaryColor, active: pv_primary_w > 10 },
+      pv2: { stroke: pvSecondaryColor, glowColor: pvSecondaryColor, active: pv_secondary_w > 10 },
       bat: { stroke: bat_col, glowColor: bat_col, active: Math.abs(total_bat_w) > 10, direction: batteryDirectionSign },
       load: { stroke: effectiveLoadFlowColor, glowColor: effectiveLoadFlowColor, active: loadMagnitude > 10, direction: 1 },
       grid: { stroke: effectiveGridColor, glowColor: effectiveGridColor, active: gridActive, direction: gridAnimationDirection },
-      car: { stroke: carFlowColor, glowColor: carFlowColor, active: Math.abs(car_w) > 10, direction: 1 }
+      car1: { stroke: carFlowColor, glowColor: carFlowColor, active: showCar1 && Math.abs(car1PowerValue) > 10, direction: 1 },
+      car2: { stroke: carFlowColor, glowColor: carFlowColor, active: showCar2 && Math.abs(car2PowerValue) > 10, direction: 1 }
     };
 
     flows.pv1.direction = 1;
     flows.pv2.direction = 1;
+    flows.car1.direction = 1;
+    flows.car2.direction = 1;
 
     const flowDurations = Object.fromEntries(
       Object.entries(flows).map(([key, state]) => [key, state.active ? 1 : 0])
     );
+
+    const flowPaths = {
+      pv1: FLOW_PATHS.pv1,
+      pv2: FLOW_PATHS.pv2,
+      bat: FLOW_PATHS.bat,
+      load: FLOW_PATHS.load,
+      grid: FLOW_PATHS.grid,
+      car1: carLayout.car1.path,
+      car2: carLayout.car2.path
+    };
+
+    const car1Color = resolveColor(config.car1_color, C_WHITE);
+    const car2Color = resolveColor(config.car2_color, C_WHITE);
+    const car1NameColor = resolveColor(config.car1_name_color, car1Color);
+    const car2NameColor = resolveColor(config.car2_name_color, car2Color);
+    const car1SocColor = resolveColor(config.car_pct_color, '#00FFFF');
+    const car2SocColor = resolveColor(config.car2_pct_color, car1SocColor);
+    const buildCarView = (visible, label, powerValue, socValue, transforms, positions, nameFontSize, powerFontSize, socFontSize, textColor, nameColor, socColor) => {
+      const textX = (typeof positions.x === 'number') ? positions.x : CAR_TEXT_BASE.x;
+      return {
+        visible,
+        label: {
+          text: visible ? label : '',
+          fontSize: nameFontSize,
+          fill: nameColor,
+          x: textX,
+          y: positions.labelY,
+          transform: transforms.label
+        },
+        power: {
+          text: visible ? this.formatPower(powerValue, use_kw) : '',
+          fontSize: powerFontSize,
+          fill: textColor,
+          x: textX,
+          y: positions.powerY,
+          transform: transforms.power
+        },
+        soc: {
+          visible: visible && socValue !== null,
+          text: (visible && socValue !== null) ? `${Math.round(socValue)}%` : '',
+          fontSize: socFontSize,
+          fill: socColor,
+          x: textX,
+          y: positions.socY,
+          transform: transforms.soc
+        }
+      };
+    };
+    const car1View = buildCarView(showCar1, car1Label, car1PowerValue, car1SocValue, car1Transforms, carLayout.car1, car_name_font_size, car_power_font_size, car_soc_font_size, car1Color, car1NameColor, car1SocColor);
+    const car2View = buildCarView(showCar2, car2Label, car2PowerValue, car2SocValue, car2Transforms, carLayout.car2, car2_name_font_size, car2_power_font_size, car2_soc_font_size, car2Color, car2NameColor, car2SocColor);
 
     const viewState = {
       backgroundImage: bg_img,
@@ -1112,22 +1328,14 @@ class LuminaEnergyCard extends HTMLElement {
       battery: { levelOffset: BATTERY_GEOMETRY.MAX_HEIGHT - current_h, fill: liquid_fill },
       batterySoc: { text: `${Math.floor(avg_soc)}%`, fontSize: battery_soc_font_size, fill: C_WHITE },
       batteryPower: { text: this.formatPower(Math.abs(total_bat_w), use_kw), fontSize: battery_power_font_size, fill: bat_col },
-      load: { text: this.formatPower(loadValue, use_kw), fontSize: load_font_size, fill: effectiveLoadTextColor },
+      load: (loadLines && loadLines.length) ? { lines: loadLines, y: loadY, fontSize: load_font_size, fill: effectiveLoadTextColor } : { text: this.formatPower(loadValue, use_kw), fontSize: load_font_size, fill: effectiveLoadTextColor },
       grid: { text: this.formatPower(Math.abs(gridNet), use_kw), fontSize: grid_font_size, fill: effectiveGridColor },
-      carPower: {
-        text: showCarInfo ? this.formatPower(car_w, use_kw) : '',
-        fontSize: car_power_font_size,
-        fill: C_WHITE,
-        visible: showCarInfo
-      },
-      carSoc: {
-        visible: Boolean(showCarInfo && car_soc !== null),
-        text: (showCarInfo && car_soc !== null) ? `${Math.round(car_soc)}%` : '',
-        fontSize: car_soc_font_size,
-        fill: config.car_pct_color || '#00FFFF'
-      },
+      car1: car1View,
+      car2: car2View,
       flows,
-      flowDurations
+      flowDurations,
+      flowPaths,
+      showDebugGrid
     };
 
     this._ensureTemplate(viewState);
@@ -1152,7 +1360,10 @@ class LuminaEnergyCard extends HTMLElement {
   _buildTemplate(viewState) {
     const batX = BATTERY_GEOMETRY.X;
     const batteryPath = `M ${batX - 20} 5 Q ${batX} 0 ${batX + 20} 5 T ${batX + 60} 5 T ${batX + 100} 5 T ${batX + 140} 5 V 150 H ${batX - 20} Z`;
-    const carSocDisplay = viewState.carSoc.visible ? 'inline' : 'none';
+    const car1Display = viewState.car1.visible ? 'inline' : 'none';
+    const car1SocDisplay = viewState.car1.soc.visible ? 'inline' : 'none';
+    const car2Display = viewState.car2.visible ? 'inline' : 'none';
+    const car2SocDisplay = viewState.car2.soc.visible ? 'inline' : 'none';
     const pvLineElements = viewState.pv.lines.map((line, index) => {
       const display = line.visible ? 'inline' : 'none';
       return `<text data-role="pv-line-${index}" x="${TEXT_POSITIONS.solar.x}" y="${line.y}" transform="${TEXT_TRANSFORMS.solar}" fill="${line.fill}" font-size="${viewState.pv.fontSize}" style="${TXT_STYLE}; display:${display};">${line.text}</text>`;
@@ -1166,6 +1377,8 @@ class LuminaEnergyCard extends HTMLElement {
         .track-path { stroke: #555555; stroke-width: 2px; fill: none; opacity: 0; }
         .flow-path { stroke-linecap: round; stroke-width: 3px; fill: none; opacity: 0; transition: opacity 0.35s ease; filter: none; }
         .flow-arrow { pointer-events: none; opacity: 0; transition: opacity 0.35s ease; }
+        .debug-grid line { pointer-events: none; }
+        .debug-grid text { pointer-events: none; font-family: sans-serif; }
         @keyframes pulse-cyan { 0% { filter: drop-shadow(0 0 2px #00FFFF); opacity: 0.9; } 50% { filter: drop-shadow(0 0 10px #00FFFF); opacity: 1; } 100% { filter: drop-shadow(0 0 2px #00FFFF); opacity: 0.9; } }
         .alive-box { animation: pulse-cyan 3s infinite ease-in-out; stroke: #00FFFF; stroke-width: 2px; fill: rgba(0, 20, 40, 0.7); }
         .alive-text { animation: pulse-cyan 3s infinite ease-in-out; fill: #00FFFF; text-shadow: 0 0 5px #00FFFF; }
@@ -1180,6 +1393,9 @@ class LuminaEnergyCard extends HTMLElement {
           </defs>
 
           <image data-role="background-image" href="${viewState.backgroundImage}" xlink:href="${viewState.backgroundImage}" x="0" y="0" width="800" height="450" preserveAspectRatio="none" />
+          <g data-role="debug-grid" class="debug-grid" style="display:none;">
+            ${DEBUG_GRID_CONTENT}
+          </g>
 
           <rect x="290" y="10" width="220" height="32" rx="6" ry="6" fill="rgba(0, 20, 40, 0.85)" stroke="#00FFFF" stroke-width="1.5"/>
           <text data-role="title-text" x="400" y="32" class="title-text" font-size="${viewState.title.fontSize}">${viewState.title.text}</text>
@@ -1200,35 +1416,46 @@ class LuminaEnergyCard extends HTMLElement {
             </g>
           </g>
 
-          <path class="track-path" d="${FLOW_PATHS.pv1}" />
-          <path class="flow-path" data-flow-key="pv1" d="${FLOW_PATHS.pv1}" stroke="${viewState.flows.pv1.stroke}" style="opacity:0;" />
+          <path class="track-path" d="${viewState.flowPaths.pv1}" />
+          <path class="flow-path" data-flow-key="pv1" d="${viewState.flowPaths.pv1}" stroke="${viewState.flows.pv1.stroke}" style="opacity:0;" />
           ${buildArrowGroupSvg('pv1', viewState.flows.pv1)}
-          <path class="track-path" d="${FLOW_PATHS.pv2}" />
-          <path class="flow-path" data-flow-key="pv2" d="${FLOW_PATHS.pv2}" stroke="${viewState.flows.pv2.stroke}" style="opacity:0;" />
+          <path class="track-path" d="${viewState.flowPaths.pv2}" />
+          <path class="flow-path" data-flow-key="pv2" d="${viewState.flowPaths.pv2}" stroke="${viewState.flows.pv2.stroke}" style="opacity:0;" />
           ${buildArrowGroupSvg('pv2', viewState.flows.pv2)}
-          <path class="track-path" d="${FLOW_PATHS.bat}" />
-          <path class="flow-path" data-flow-key="bat" d="${FLOW_PATHS.bat}" stroke="${viewState.flows.bat.stroke}" style="opacity:0;" />
+          <path class="track-path" d="${viewState.flowPaths.bat}" />
+          <path class="flow-path" data-flow-key="bat" d="${viewState.flowPaths.bat}" stroke="${viewState.flows.bat.stroke}" style="opacity:0;" />
           ${buildArrowGroupSvg('bat', viewState.flows.bat)}
-          <path class="track-path" d="${FLOW_PATHS.load}" />
-          <path class="flow-path" data-flow-key="load" d="${FLOW_PATHS.load}" stroke="${viewState.flows.load.stroke}" style="opacity:0;" />
+          <path class="track-path" d="${viewState.flowPaths.load}" />
+          <path class="flow-path" data-flow-key="load" d="${viewState.flowPaths.load}" stroke="${viewState.flows.load.stroke}" style="opacity:0;" />
           ${buildArrowGroupSvg('load', viewState.flows.load)}
-          <path class="track-path" d="${FLOW_PATHS.grid}" />
-          <path class="flow-path" data-flow-key="grid" d="${FLOW_PATHS.grid}" stroke="${viewState.flows.grid.stroke}" style="opacity:0;" />
+          <path class="track-path" d="${viewState.flowPaths.grid}" />
+          <path class="flow-path" data-flow-key="grid" d="${viewState.flowPaths.grid}" stroke="${viewState.flows.grid.stroke}" style="opacity:0;" />
           ${buildArrowGroupSvg('grid', viewState.flows.grid)}
-          <path class="track-path" d="${FLOW_PATHS.car}" />
-          <path class="flow-path" data-flow-key="car" d="${FLOW_PATHS.car}" stroke="${viewState.flows.car.stroke}" style="opacity:0;" />
-          ${buildArrowGroupSvg('car', viewState.flows.car)}
+          <path class="track-path" d="${viewState.flowPaths.car1}" />
+          <path class="flow-path" data-flow-key="car1" d="${viewState.flowPaths.car1}" stroke="${viewState.flows.car1.stroke}" style="opacity:0;" />
+          ${buildArrowGroupSvg('car1', viewState.flows.car1)}
+          <path class="track-path" d="${viewState.flowPaths.car2}" />
+          <path class="flow-path" data-flow-key="car2" d="${viewState.flowPaths.car2}" stroke="${viewState.flows.car2.stroke}" style="opacity:0;" />
+          ${buildArrowGroupSvg('car2', viewState.flows.car2)}
 
           ${pvLineElements}
 
           <text data-role="battery-soc" x="${TEXT_POSITIONS.battery.x}" y="${TEXT_POSITIONS.battery.y}" transform="${TEXT_TRANSFORMS.battery}" fill="${viewState.batterySoc.fill}" font-size="${viewState.batterySoc.fontSize}" style="${TXT_STYLE}">${viewState.batterySoc.text}</text>
           <text data-role="battery-power" x="${TEXT_POSITIONS.battery.x}" y="${TEXT_POSITIONS.battery.y + 20}" transform="${TEXT_TRANSFORMS.battery}" fill="${viewState.batteryPower.fill}" font-size="${viewState.batteryPower.fontSize}" style="${TXT_STYLE}">${viewState.batteryPower.text}</text>
 
-          <text data-role="load-power" x="${TEXT_POSITIONS.home.x}" y="${TEXT_POSITIONS.home.y}" transform="${TEXT_TRANSFORMS.home}" fill="${viewState.load.fill}" font-size="${viewState.load.fontSize}" style="${TXT_STYLE}">${viewState.load.text}</text>
+          <text data-role="load-power" x="${TEXT_POSITIONS.home.x}" y="${TEXT_POSITIONS.home.y}" transform="${TEXT_TRANSFORMS.home}" fill="${viewState.load.fill}" font-size="${viewState.load.fontSize}" style="${TXT_STYLE}">${viewState.load.text || ''}</text>
+          <text data-role="load-line-0" x="${TEXT_POSITIONS.home.x}" y="${TEXT_POSITIONS.home.y}" transform="${TEXT_TRANSFORMS.home}" fill="${(viewState.load.lines && viewState.load.lines[0] && viewState.load.lines[0].fill) || viewState.load.fill}" font-size="${viewState.load.fontSize}" style="${TXT_STYLE}; display:none;"></text>
+          <text data-role="load-line-1" x="${TEXT_POSITIONS.home.x}" y="${TEXT_POSITIONS.home.y}" transform="${TEXT_TRANSFORMS.home}" fill="${(viewState.load.lines && viewState.load.lines[1] && viewState.load.lines[1].fill) || viewState.load.fill}" font-size="${viewState.load.fontSize}" style="${TXT_STYLE}; display:none;"></text>
+          <text data-role="load-line-2" x="${TEXT_POSITIONS.home.x}" y="${TEXT_POSITIONS.home.y}" transform="${TEXT_TRANSFORMS.home}" fill="${(viewState.load.lines && viewState.load.lines[2] && viewState.load.lines[2].fill) || viewState.load.fill}" font-size="${viewState.load.fontSize}" style="${TXT_STYLE}; display:none;"></text>
           <text data-role="grid-power" x="${TEXT_POSITIONS.grid.x}" y="${TEXT_POSITIONS.grid.y}" transform="${TEXT_TRANSFORMS.grid}" fill="${viewState.grid.fill}" font-size="${viewState.grid.fontSize}" style="${TXT_STYLE}">${viewState.grid.text}</text>
 
-          <text data-role="car-power" x="${TEXT_POSITIONS.car.x}" y="${TEXT_POSITIONS.car.y}" transform="${TEXT_TRANSFORMS.car}" fill="${viewState.carPower.fill}" font-size="${viewState.carPower.fontSize}" style="${TXT_STYLE}">${viewState.carPower.text}</text>
-          <text data-role="car-soc" x="${TEXT_POSITIONS.car.x}" y="${TEXT_POSITIONS.car.y + 15}" transform="${TEXT_TRANSFORMS.car}" fill="${viewState.carSoc.fill}" font-size="${viewState.carSoc.fontSize}" style="${TXT_STYLE}; display:${carSocDisplay};">${viewState.carSoc.text}</text>
+          <text data-role="car1-label" x="${viewState.car1.label.x}" y="${viewState.car1.label.y}" transform="${viewState.car1.label.transform}" fill="${viewState.car1.label.fill}" font-size="${viewState.car1.label.fontSize}" style="${TXT_STYLE}; display:${car1Display};">${viewState.car1.label.text}</text>
+          <text data-role="car1-power" x="${viewState.car1.power.x}" y="${viewState.car1.power.y}" transform="${viewState.car1.power.transform}" fill="${viewState.car1.power.fill}" font-size="${viewState.car1.power.fontSize}" style="${TXT_STYLE}; display:${car1Display};">${viewState.car1.power.text}</text>
+          <text data-role="car1-soc" x="${viewState.car1.soc.x}" y="${viewState.car1.soc.y}" transform="${viewState.car1.soc.transform}" fill="${viewState.car1.soc.fill}" font-size="${viewState.car1.soc.fontSize}" style="${TXT_STYLE}; display:${car1SocDisplay};">${viewState.car1.soc.text}</text>
+
+          <text data-role="car2-label" x="${viewState.car2.label.x}" y="${viewState.car2.label.y}" transform="${viewState.car2.label.transform}" fill="${viewState.car2.label.fill}" font-size="${viewState.car2.label.fontSize}" style="${TXT_STYLE}; display:${car2Display};">${viewState.car2.label.text}</text>
+          <text data-role="car2-power" x="${viewState.car2.power.x}" y="${viewState.car2.power.y}" transform="${viewState.car2.power.transform}" fill="${viewState.car2.power.fill}" font-size="${viewState.car2.power.fontSize}" style="${TXT_STYLE}; display:${car2Display};">${viewState.car2.power.text}</text>
+          <text data-role="car2-soc" x="${viewState.car2.soc.x}" y="${viewState.car2.soc.y}" transform="${viewState.car2.soc.transform}" fill="${viewState.car2.soc.fill}" font-size="${viewState.car2.soc.fontSize}" style="${TXT_STYLE}; display:${car2SocDisplay};">${viewState.car2.soc.text}</text>
         </svg>
       </ha-card>
     `;
@@ -1244,6 +1471,7 @@ class LuminaEnergyCard extends HTMLElement {
     }
     this._domRefs = {
       background: root.querySelector('[data-role="background-image"]'),
+      debugGrid: root.querySelector('[data-role="debug-grid"]'),
       title: root.querySelector('[data-role="title-text"]'),
       dailyLabel: root.querySelector('[data-role="daily-label"]'),
       dailyValue: root.querySelector('[data-role="daily-value"]'),
@@ -1253,16 +1481,22 @@ class LuminaEnergyCard extends HTMLElement {
       batterySoc: root.querySelector('[data-role="battery-soc"]'),
       batteryPower: root.querySelector('[data-role="battery-power"]'),
       loadText: root.querySelector('[data-role="load-power"]'),
+      loadLines: Array.from({ length: 3 }, (_, index) => root.querySelector(`[data-role="load-line-${index}"]`)),
       gridText: root.querySelector('[data-role="grid-power"]'),
-      carPower: root.querySelector('[data-role="car-power"]'),
-      carSoc: root.querySelector('[data-role="car-soc"]'),
+      car1Label: root.querySelector('[data-role="car1-label"]'),
+      car1Power: root.querySelector('[data-role="car1-power"]'),
+      car1Soc: root.querySelector('[data-role="car1-soc"]'),
+      car2Label: root.querySelector('[data-role="car2-label"]'),
+      car2Power: root.querySelector('[data-role="car2-power"]'),
+      car2Soc: root.querySelector('[data-role="car2-soc"]'),
       flows: {
         pv1: root.querySelector('[data-flow-key="pv1"]'),
         pv2: root.querySelector('[data-flow-key="pv2"]'),
         bat: root.querySelector('[data-flow-key="bat"]'),
         load: root.querySelector('[data-flow-key="load"]'),
         grid: root.querySelector('[data-flow-key="grid"]'),
-        car: root.querySelector('[data-flow-key="car"]')
+        car1: root.querySelector('[data-flow-key="car1"]'),
+        car2: root.querySelector('[data-flow-key="car2"]')
       },
       arrows: {
         pv1: root.querySelector('[data-arrow-key="pv1"]'),
@@ -1270,7 +1504,8 @@ class LuminaEnergyCard extends HTMLElement {
         bat: root.querySelector('[data-arrow-key="bat"]'),
         load: root.querySelector('[data-arrow-key="load"]'),
         grid: root.querySelector('[data-arrow-key="grid"]'),
-        car: root.querySelector('[data-arrow-key="car"]')
+        car1: root.querySelector('[data-arrow-key="car1"]'),
+        car2: root.querySelector('[data-arrow-key="car2"]')
       },
       arrowShapes: {
         pv1: Array.from(root.querySelectorAll('[data-arrow-shape="pv1"]')),
@@ -1278,7 +1513,8 @@ class LuminaEnergyCard extends HTMLElement {
         bat: Array.from(root.querySelectorAll('[data-arrow-shape="bat"]')),
         load: Array.from(root.querySelectorAll('[data-arrow-shape="load"]')),
         grid: Array.from(root.querySelectorAll('[data-arrow-shape="grid"]')),
-        car: Array.from(root.querySelectorAll('[data-arrow-shape="car"]'))
+        car1: Array.from(root.querySelectorAll('[data-arrow-shape="car1"]')),
+        car2: Array.from(root.querySelectorAll('[data-arrow-shape="car2"]'))
       }
     };
 
@@ -1312,6 +1548,13 @@ class LuminaEnergyCard extends HTMLElement {
     if (refs.background && prev.backgroundImage !== viewState.backgroundImage) {
       refs.background.setAttribute('href', viewState.backgroundImage);
       refs.background.setAttribute('xlink:href', viewState.backgroundImage);
+    }
+
+    if (refs.debugGrid) {
+      const desired = viewState.showDebugGrid ? 'inline' : 'none';
+      if (refs.debugGrid.style.display !== desired) {
+        refs.debugGrid.style.display = desired;
+      }
     }
 
     if (refs.title) {
@@ -1405,8 +1648,51 @@ class LuminaEnergyCard extends HTMLElement {
     }
 
     if (refs.loadText) {
-      if (!prev.load || prev.load.text !== viewState.load.text) {
-        refs.loadText.textContent = viewState.load.text;
+      const lines = viewState.load && viewState.load.lines && viewState.load.lines.length ? viewState.load.lines : null;
+      if (lines) {
+        // Multi-line mode: update individual load-line nodes
+        if (refs.loadLines && refs.loadLines.length) {
+          const baseY = viewState.load.y || TEXT_POSITIONS.home.y;
+          const lineSpacing = viewState.load.fontSize + 4;
+          lines.forEach((l, idx) => {
+            const node = refs.loadLines[idx];
+            if (!node) return;
+            if (!prev.load || !prev.load.lines || (prev.load.lines[idx] || {}).text !== l.text) {
+              node.textContent = l.text;
+            }
+            if (!prev.load || !prev.load.lines || (prev.load.lines[idx] || {}).fill !== l.fill) {
+              node.setAttribute('fill', l.fill || viewState.load.fill);
+            }
+            if (!prev.load || prev.load.fontSize !== viewState.load.fontSize) {
+              node.setAttribute('font-size', viewState.load.fontSize);
+            }
+            const desiredY = baseY + idx * lineSpacing;
+            if (!prev.load || prev.load.y !== desiredY) {
+              node.setAttribute('y', desiredY);
+            }
+            if (node.style.display !== 'inline') node.style.display = 'inline';
+          });
+          // hide unused lines
+          for (let i = lines.length; i < refs.loadLines.length; i++) {
+            const node = refs.loadLines[i];
+            if (node && node.style.display !== 'none') node.style.display = 'none';
+          }
+        }
+        // hide single-line element
+        if (refs.loadText.style.display !== 'none') refs.loadText.style.display = 'none';
+      } else {
+        // Single-line mode
+        if (!prev.load || prev.load.text !== viewState.load.text) {
+          refs.loadText.textContent = viewState.load.text || '';
+        }
+        // restore default y if previously modified
+        if (!prev.load || prev.load.y !== undefined) {
+          refs.loadText.setAttribute('y', TEXT_POSITIONS.home.y);
+        }
+        if (refs.loadLines && refs.loadLines.length) {
+          refs.loadLines.forEach((node) => { if (node && node.style.display !== 'none') node.style.display = 'none'; });
+        }
+        if (refs.loadText.style.display !== 'inline') refs.loadText.style.display = 'inline';
       }
       if (!prev.load || prev.load.fill !== viewState.load.fill) {
         refs.loadText.setAttribute('fill', viewState.load.fill);
@@ -1428,41 +1714,50 @@ class LuminaEnergyCard extends HTMLElement {
       }
     }
 
-    if (refs.carPower) {
-      const powerDisplay = viewState.carPower.visible ? 'inline' : 'none';
-      if (refs.carPower.style.display !== powerDisplay) {
-        refs.carPower.style.display = powerDisplay;
+    const syncCarText = (node, viewEntry, prevEntry, displayFlag) => {
+      if (!node || !viewEntry) {
+        return;
       }
-      if (viewState.carPower.visible) {
-        if (!prev.carPower || prev.carPower.text !== viewState.carPower.text) {
-          refs.carPower.textContent = viewState.carPower.text;
-        }
-        if (!prev.carPower || prev.carPower.fill !== viewState.carPower.fill) {
-          refs.carPower.setAttribute('fill', viewState.carPower.fill);
-        }
-        if (!prev.carPower || prev.carPower.fontSize !== viewState.carPower.fontSize) {
-          refs.carPower.setAttribute('font-size', viewState.carPower.fontSize);
-        }
+      const desiredDisplay = displayFlag ? 'inline' : 'none';
+      if (node.style.display !== desiredDisplay) {
+        node.style.display = desiredDisplay;
       }
-    }
+      if (!displayFlag) {
+        return;
+      }
+      if (!prevEntry || prevEntry.text !== viewEntry.text) {
+        node.textContent = viewEntry.text;
+      }
+      if (!prevEntry || prevEntry.fill !== viewEntry.fill) {
+        node.setAttribute('fill', viewEntry.fill);
+      }
+      if (!prevEntry || prevEntry.fontSize !== viewEntry.fontSize) {
+        node.setAttribute('font-size', viewEntry.fontSize);
+      }
+      if (!prevEntry || prevEntry.x !== viewEntry.x) {
+        node.setAttribute('x', viewEntry.x);
+      }
+      if (!prevEntry || prevEntry.y !== viewEntry.y) {
+        node.setAttribute('y', viewEntry.y);
+      }
+      if (!prevEntry || prevEntry.transform !== viewEntry.transform) {
+        node.setAttribute('transform', viewEntry.transform);
+      }
+    };
 
-    if (refs.carSoc) {
-      const display = viewState.carSoc.visible ? 'inline' : 'none';
-      if (refs.carSoc.style.display !== display) {
-        refs.carSoc.style.display = display;
+    const syncCarSection = (key) => {
+      const carView = viewState[key];
+      if (!carView) {
+        return;
       }
-      if (viewState.carSoc.visible) {
-        if (!prev.carSoc || prev.carSoc.text !== viewState.carSoc.text) {
-          refs.carSoc.textContent = viewState.carSoc.text;
-        }
-        if (!prev.carSoc || prev.carSoc.fill !== viewState.carSoc.fill) {
-          refs.carSoc.setAttribute('fill', viewState.carSoc.fill);
-        }
-        if (!prev.carSoc || prev.carSoc.fontSize !== viewState.carSoc.fontSize) {
-          refs.carSoc.setAttribute('font-size', viewState.carSoc.fontSize);
-        }
-      }
-    }
+      const prevCar = prev[key] || {};
+      syncCarText(refs[`${key}Label`], carView.label, prevCar.label, carView.visible);
+      syncCarText(refs[`${key}Power`], carView.power, prevCar.power, carView.visible);
+      syncCarText(refs[`${key}Soc`], carView.soc, prevCar.soc, carView.soc.visible);
+    };
+
+    syncCarSection('car1');
+    syncCarSection('car2');
 
     const prevFlows = prev.flows || {};
     Object.entries(viewState.flows).forEach(([key, flowState]) => {
@@ -1513,6 +1808,21 @@ class LuminaEnergyCard extends HTMLElement {
         }
       }
     });
+
+    if (refs.flows && viewState.flowPaths) {
+      Object.entries(viewState.flowPaths).forEach(([key, dValue]) => {
+        const path = refs.flows[key];
+        if (!path || typeof dValue !== 'string') {
+          return;
+        }
+        if (path.getAttribute('d') !== dValue) {
+          path.setAttribute('d', dValue);
+          if (this._flowPathLengths && this._flowPathLengths.has(key)) {
+            this._flowPathLengths.delete(key);
+          }
+        }
+      });
+    }
   }
 
   _snapshotViewState(viewState) {
@@ -1530,14 +1840,26 @@ class LuminaEnergyCard extends HTMLElement {
       batteryPower: { ...viewState.batteryPower },
       load: { ...viewState.load },
       grid: { ...viewState.grid },
-      carPower: { ...viewState.carPower },
-      carSoc: { ...viewState.carSoc },
-      flows: Object.fromEntries(Object.entries(viewState.flows).map(([key, value]) => [key, { ...value }]))
+      car1: viewState.car1 ? {
+        visible: viewState.car1.visible,
+        label: { ...viewState.car1.label },
+        power: { ...viewState.car1.power },
+        soc: { ...viewState.car1.soc }
+      } : undefined,
+      car2: viewState.car2 ? {
+        visible: viewState.car2.visible,
+        label: { ...viewState.car2.label },
+        power: { ...viewState.car2.power },
+        soc: { ...viewState.car2.soc }
+      } : undefined,
+      flows: Object.fromEntries(Object.entries(viewState.flows).map(([key, value]) => [key, { ...value }])),
+      flowPaths: { ...viewState.flowPaths },
+      showDebugGrid: Boolean(viewState.showDebugGrid)
     };
   }
 
   static get version() {
-    return '1.1.21';
+    return '1.1.24';
   }
 }
 
@@ -1575,15 +1897,27 @@ class LuminaEnergyCardEditor extends HTMLElement {
           update_interval: { label: 'Update Interval', helper: 'Refresh cadence for card updates (0 disables throttling).' },
           animation_speed_factor: { label: 'Animation Speed Factor', helper: 'Adjust animation speed multiplier (-3x to 3x). Set 0 to pause; negatives reverse direction.' },
           animation_style: { label: 'Animation Style', helper: 'Choose the flow animation motif (dashes, dots, or arrows).' },
+          
           sensor_pv_total: { label: 'PV Total Sensor', helper: 'Optional aggregate production sensor displayed as the combined line.' },
-          sensor_pv1: { label: 'PV Sensor 1 (Required)', helper: 'Primary solar production sensor.' },
-          sensor_pv2: { label: 'PV Sensor 2' },
-          sensor_pv3: { label: 'PV Sensor 3' },
-          sensor_pv4: { label: 'PV Sensor 4' },
-          sensor_pv5: { label: 'PV Sensor 5' },
-          sensor_pv6: { label: 'PV Sensor 6' },
+          sensor_pv_total_secondary: { label: 'PV Total Sensor (Inverter 2)', helper: 'Optional second inverter total; added to the PV total when provided.' },
+          sensor_pv1: { label: 'PV String (Array 1) 1 (Required)', helper: 'Primary solar production sensor.' },
+          sensor_pv2: { label: 'PV String (Array 1) 2' },
+          sensor_pv3: { label: 'PV String (Array 1) 3' },
+          sensor_pv4: { label: 'PV String (Array 1) 4' },
+          sensor_pv5: { label: 'PV String (Array 1) 5' },
+          sensor_pv6: { label: 'PV String (Array 1) 6' },
+          solar_array2_title: { label: 'Solar Array 2 (Optional)' },
+          solar_array2_title: { label: 'Array Solare 2 (Opzionale)' },
+          solar_array2_title: { label: 'Solar Array 2 (Optional)' },
+          sensor_pv_array2_1: { label: 'PV String 1 (Array 2)', helper: 'Array 2 solar production sensor.' },
+          sensor_pv_array2_2: { label: 'PV String 2 (Array 2)', helper: 'Array 2 solar production sensor.' },
+          sensor_pv_array2_3: { label: 'PV String 3 (Array 2)', helper: 'Array 2 solar production sensor.' },
+          sensor_pv_array2_4: { label: 'PV String 4 (Array 2)', helper: 'Array 2 solar production sensor.' },
+          sensor_pv_array2_5: { label: 'PV String 5 (Array 2)', helper: 'Array 2 solar production sensor.' },
+          sensor_pv_array2_6: { label: 'PV String 6 (Array 2)', helper: 'Array 2 solar production sensor.' },
           show_pv_strings: { label: 'Show Individual PV Strings', helper: 'Toggle to display the total plus each PV string on separate lines.' },
           sensor_daily: { label: 'Daily Production Sensor', helper: 'Sensor reporting daily production totals.' },
+          sensor_daily_array2: { label: 'Daily Production Sensor (Array 2)', helper: 'Sensor reporting daily production totals for Array 2.' },
           sensor_bat1_soc: { label: 'Battery 1 SOC' },
           sensor_bat1_power: { label: 'Battery 1 Power' },
           sensor_bat2_soc: { label: 'Battery 2 SOC' },
@@ -1593,12 +1927,23 @@ class LuminaEnergyCardEditor extends HTMLElement {
           sensor_bat4_soc: { label: 'Battery 4 SOC' },
           sensor_bat4_power: { label: 'Battery 4 Power' },
           sensor_home_load: { label: 'Home Load/Consumption', helper: 'Total household consumption sensor.' },
-          sensor_grid_power: { label: 'Grid Power', helper: 'Positive/negative grid flow sensor.' },
+          sensor_home_load_secondary: { label: 'Home Load (Inverter 2)', helper: 'Optional house load sensor for the second inverter.' },
+          sensor_grid_power: { label: 'Grid Power', helper: 'Positive/negative grid flow sensor. Specify either this sensor or both Grid Import Sensor and Grid Export Sensor.' },
           sensor_grid_import: { label: 'Grid Import Sensor', helper: 'Optional entity reporting grid import (positive) power.' },
           sensor_grid_export: { label: 'Grid Export Sensor', helper: 'Optional entity reporting grid export (positive) power.' },
+          pv_tot_color: { label: 'PV Total Color', helper: 'Colour applied to the PV TOT text line.' },
           pv_primary_color: { label: 'PV 1 Flow Color', helper: 'Colour used for the primary PV animation line.' },
           pv_secondary_color: { label: 'PV 2 Flow Color', helper: 'Colour used for the secondary PV animation line when available.' },
+          pv_string1_color: { label: 'PV String 1 Color', helper: 'Override for S1 in the PV list. Leave blank to inherit the PV total color.' },
+          pv_string2_color: { label: 'PV String 2 Color', helper: 'Override for S2 in the PV list. Leave blank to inherit the PV total color.' },
+          pv_string3_color: { label: 'PV String 3 Color', helper: 'Override for S3 in the PV list. Leave blank to inherit the PV total color.' },
+          pv_string4_color: { label: 'PV String 4 Color', helper: 'Override for S4 in the PV list. Leave blank to inherit the PV total color.' },
+          pv_string5_color: { label: 'PV String 5 Color', helper: 'Override for S5 in the PV list. Leave blank to inherit the PV total color.' },
+          pv_string6_color: { label: 'PV String 6 Color', helper: 'Override for S6 in the PV list. Leave blank to inherit the PV total color.' },
           load_flow_color: { label: 'Load Flow Color', helper: 'Colour applied to the home load animation line.' },
+          house_total_color: { label: 'House Total Color', helper: 'Colour applied to the HOUSE TOT text/flow.' },
+          inv1_color: { label: 'INV 1 Color', helper: 'Colour applied to the INV 1 text/flow.' },
+          inv2_color: { label: 'INV 2 Color', helper: 'Colour applied to the INV 2 text/flow.' },
           load_threshold_warning: { label: 'Load Warning Threshold', helper: 'Change load color when magnitude equals or exceeds this value. Uses the selected display unit.' },
           load_warning_color: { label: 'Load Warning Color', helper: 'Hex or CSS color applied at the load warning threshold.' },
           load_threshold_critical: { label: 'Load Critical Threshold', helper: 'Change load color when magnitude equals or exceeds this value. Uses the selected display unit.' },
@@ -1616,11 +1961,22 @@ class LuminaEnergyCardEditor extends HTMLElement {
           grid_warning_color: { label: 'Grid Warning Color', helper: 'Hex or CSS color applied at the warning threshold.' },
           grid_threshold_critical: { label: 'Grid Critical Threshold', helper: 'Change grid color when magnitude equals or exceeds this value. Uses the selected display unit.' },
           grid_critical_color: { label: 'Grid Critical Color', helper: 'Hex or CSS color applied at the critical threshold.' },
-          invert_grid: { label: 'Invert Grid Values', helper: 'Enable if import/export polarity is reversed.' },
-          sensor_car_power: { label: 'Car Power Sensor' },
-          sensor_car_soc: { label: 'Car SOC Sensor' },
-          show_car_soc: { label: 'Show Electric Vehicle' },
+            invert_grid: { label: 'Invert Grid Values', helper: 'Enable if import/export polarity is reversed.' },
+            invert_battery: { label: 'Invert Battery Values', helper: 'Enable if charge/discharge polarity is reversed.' },
+          sensor_car_power: { label: 'Car 1 Power Sensor' },
+          sensor_car_soc: { label: 'Car 1 SOC Sensor' },
+          car1_label: { label: 'Car 1 Label', helper: 'Text displayed next to the first EV values.' },
+          sensor_car2_power: { label: 'Car 2 Power Sensor' },
+          sensor_car2_soc: { label: 'Car 2 SOC Sensor' },
+          car2_label: { label: 'Car 2 Label', helper: 'Text displayed next to the second EV values.' },
+          show_car_soc: { label: 'Show Car 1', helper: 'Toggle to render the first EV metrics.' },
+          show_car2: { label: 'Show Car 2', helper: 'Enable to render the second EV metrics when sensors are provided.' },
           car_pct_color: { label: 'Car SOC Color', helper: 'Hex color for EV SOC text (e.g., #00FFFF).' },
+          car2_pct_color: { label: 'Car 2 SOC Color', helper: 'Hex color for second EV SOC text (falls back to Car SOC Color).' },
+          car1_name_color: { label: 'Car 1 Name Color', helper: 'Color applied to the Car 1 name label.' },
+          car2_name_color: { label: 'Car 2 Name Color', helper: 'Color applied to the Car 2 name label.' },
+          car1_color: { label: 'Car 1 Color', helper: 'Color applied to Car 1 power value.' },
+          car2_color: { label: 'Car 2 Color', helper: 'Color applied to Car 2 power value.' },
           header_font_size: { label: 'Header Font Size (px)', helper: 'Default 16' },
           daily_label_font_size: { label: 'Daily Label Font Size (px)', helper: 'Default 12' },
           daily_value_font_size: { label: 'Daily Value Font Size (px)', helper: 'Default 20' },
@@ -1630,7 +1986,11 @@ class LuminaEnergyCardEditor extends HTMLElement {
           load_font_size: { label: 'Load Font Size (px)', helper: 'Default 15' },
           grid_font_size: { label: 'Grid Font Size (px)', helper: 'Default 15' },
           car_power_font_size: { label: 'Car Power Font Size (px)', helper: 'Default 15' },
-          car_soc_font_size: { label: 'Car SOC Font Size (px)', helper: 'Default 12' }
+          car2_power_font_size: { label: 'Car 2 Power Font Size (px)', helper: 'Default 15' },
+          car_name_font_size: { label: 'Car Name Font Size (px)', helper: 'Default 15' },
+          car2_name_font_size: { label: 'Car 2 Name Font Size (px)', helper: 'Default 15' },
+          car_soc_font_size: { label: 'Car SOC Font Size (px)', helper: 'Default 12' },
+          car2_soc_font_size: { label: 'Car 2 SOC Font Size (px)', helper: 'Default 12' }
         },
         options: {
           languages: [
@@ -1665,15 +2025,18 @@ class LuminaEnergyCardEditor extends HTMLElement {
           update_interval: { label: 'Intervallo di aggiornamento', helper: 'Frequenza di aggiornamento della scheda (0 disattiva il limite).' },
           animation_speed_factor: { label: 'Fattore velocita animazioni', helper: 'Regola il moltiplicatore (-3x a 3x). Usa 0 per mettere in pausa; valori negativi invertono il flusso.' },
           animation_style: { label: 'Stile animazione', helper: 'Scegli il motivo dei flussi (tratteggi, punti o frecce).' },
+          
           sensor_pv_total: { label: 'Sensore PV totale', helper: 'Sensore aggregato opzionale mostrato come linea combinata.' },
-          sensor_pv1: { label: 'Sensore PV 1 (obbligatorio)', helper: 'Sensore principale di produzione solare.' },
-          sensor_pv2: { label: 'Sensore PV 2' },
-          sensor_pv3: { label: 'Sensore PV 3' },
-          sensor_pv4: { label: 'Sensore PV 4' },
-          sensor_pv5: { label: 'Sensore PV 5' },
-          sensor_pv6: { label: 'Sensore PV 6' },
+          sensor_pv_total_secondary: { label: 'Sensore PV totale (Inverter 2)', helper: 'Secondo sensore inverter opzionale; viene sommato al totale PV.' },
+          sensor_pv1: { label: 'PV String (Array 1) 1 (obbligatorio)', helper: 'Sensore principale di produzione solare.' },
+          sensor_pv2: { label: 'PV String (Array 1) 2' },
+          sensor_pv3: { label: 'PV String (Array 1) 3' },
+          sensor_pv4: { label: 'PV String (Array 1) 4' },
+          sensor_pv5: { label: 'PV String (Array 1) 5' },
+          sensor_pv6: { label: 'PV String (Array 1) 6' },
           show_pv_strings: { label: 'Mostra stringhe PV', helper: 'Attiva per mostrare la linea totale piu ogni stringa PV separata.' },
           sensor_daily: { label: 'Sensore produzione giornaliera', helper: 'Sensore che riporta la produzione giornaliera.' },
+          sensor_daily_array2: { label: 'Sensore produzione giornaliera (Array 2)', helper: 'Sensore che riporta la produzione giornaliera per l Array 2.' },
           sensor_bat1_soc: { label: 'Batteria 1 SOC' },
           sensor_bat1_power: { label: 'Batteria 1 potenza' },
           sensor_bat2_soc: { label: 'Batteria 2 SOC' },
@@ -1683,12 +2046,23 @@ class LuminaEnergyCardEditor extends HTMLElement {
           sensor_bat4_soc: { label: 'Batteria 4 SOC' },
           sensor_bat4_power: { label: 'Batteria 4 potenza' },
           sensor_home_load: { label: 'Carico casa/consumo', helper: 'Sensore del consumo totale dell abitazione.' },
-          sensor_grid_power: { label: 'Potenza rete', helper: 'Sensore flusso rete positivo/negativo.' },
+          sensor_home_load_secondary: { label: 'Carico casa (Inverter 2)', helper: 'Sensore opzionale del carico domestico per il secondo inverter.' },
+          sensor_grid_power: { label: 'Potenza rete', helper: 'Sensore flusso rete positivo/negativo. Specificare o questo sensore o entrambi il Sensore import rete e il Sensore export rete.' },
           sensor_grid_import: { label: 'Sensore import rete', helper: 'Entita opzionale che riporta la potenza di import.' },
           sensor_grid_export: { label: 'Sensore export rete', helper: 'Entita opzionale che riporta la potenza di export.' },
           pv_primary_color: { label: 'Colore flusso FV 1', helper: 'Colore utilizzato per l animazione FV principale.' },
+          pv_tot_color: { label: 'Colore PV TOT', helper: 'Colore applicato alla riga PV TOT.' },
           pv_secondary_color: { label: 'Colore flusso FV 2', helper: 'Colore utilizzato per la seconda linea FV quando presente.' },
+          pv_string1_color: { label: 'Colore stringa FV 1', helper: 'Sovrascrive il colore di S1. Lascia vuoto per usare il colore totale FV.' },
+          pv_string2_color: { label: 'Colore stringa FV 2', helper: 'Sovrascrive il colore di S2. Lascia vuoto per usare il colore totale FV.' },
+          pv_string3_color: { label: 'Colore stringa FV 3', helper: 'Sovrascrive il colore di S3. Lascia vuoto per usare il colore totale FV.' },
+          pv_string4_color: { label: 'Colore stringa FV 4', helper: 'Sovrascrive il colore di S4. Lascia vuoto per usare il colore totale FV.' },
+          pv_string5_color: { label: 'Colore stringa FV 5', helper: 'Sovrascrive il colore di S5. Lascia vuoto per usare il colore totale FV.' },
+          pv_string6_color: { label: 'Colore stringa FV 6', helper: 'Sovrascrive il colore di S6. Lascia vuoto per usare il colore totale FV.' },
           load_flow_color: { label: 'Colore flusso carico', helper: 'Colore applicato all animazione del carico della casa.' },
+          house_total_color: { label: 'Colore HOUSE TOT', helper: 'Colore applicato al testo/flusso HOUSE TOT.' },
+          inv1_color: { label: 'Colore INV 1', helper: 'Colore applicato al testo/flusso INV 1.' },
+          inv2_color: { label: 'Colore INV 2', helper: 'Colore applicato al testo/flusso INV 2.' },
           load_threshold_warning: { label: 'Soglia avviso carico', helper: 'Cambia colore quando il carico raggiunge questa soglia. Usa l unita di visualizzazione selezionata.' },
           load_warning_color: { label: 'Colore avviso carico', helper: 'Colore applicato alla soglia di avviso del carico.' },
           load_threshold_critical: { label: 'Soglia critica carico', helper: 'Cambia colore quando il carico raggiunge questa soglia critica. Usa l unita di visualizzazione selezionata.' },
@@ -1706,11 +2080,22 @@ class LuminaEnergyCardEditor extends HTMLElement {
           grid_warning_color: { label: 'Colore avviso rete', helper: 'Colore applicato alla soglia di avviso.' },
           grid_threshold_critical: { label: 'Soglia critica rete', helper: 'Cambia colore quando la magnitudine raggiunge questa soglia. Usa l unita di visualizzazione selezionata.' },
           grid_critical_color: { label: 'Colore critico rete', helper: 'Colore applicato alla soglia critica.' },
-          invert_grid: { label: 'Inverti valori rete', helper: 'Attiva se l import/export ha polarita invertita.' },
-          sensor_car_power: { label: 'Sensore potenza auto' },
-          sensor_car_soc: { label: 'Sensore SOC auto' },
-          show_car_soc: { label: 'Mostra veicolo elettrico' },
+            invert_grid: { label: 'Inverti valori rete', helper: 'Attiva se l import/export ha polarita invertita.' },
+            invert_battery: { label: 'Inverti valori batteria', helper: 'Abilita se la polarita carica/scarica e invertita.' },
+          sensor_car_power: { label: 'Sensore potenza auto 1' },
+          sensor_car_soc: { label: 'Sensore SOC auto 1' },
+          car1_label: { label: 'Etichetta Auto 1', helper: 'Testo mostrato vicino ai valori della prima EV.' },
+          sensor_car2_power: { label: 'Sensore potenza auto 2' },
+          sensor_car2_soc: { label: 'Sensore SOC auto 2' },
+          car2_label: { label: 'Etichetta Auto 2', helper: 'Testo mostrato vicino ai valori della seconda EV.' },
+          show_car_soc: { label: 'Mostra veicolo elettrico 1', helper: 'Attiva per visualizzare i dati della prima EV.' },
+          show_car2: { label: 'Mostra veicolo elettrico 2', helper: 'Attiva e fornisci i sensori per visualizzare la seconda EV.' },
           car_pct_color: { label: 'Colore SOC auto', helper: 'Colore esadecimale per il testo SOC EV (es. #00FFFF).' },
+          car2_pct_color: { label: 'Colore SOC Auto 2', helper: 'Colore esadecimale per il testo SOC della seconda EV (usa Car SOC se vuoto).' },
+          car1_name_color: { label: 'Colore nome Auto 1', helper: 'Colore applicato all etichetta del nome Auto 1.' },
+          car2_name_color: { label: 'Colore nome Auto 2', helper: 'Colore applicato all etichetta del nome Auto 2.' },
+          car1_color: { label: 'Colore Auto 1', helper: 'Colore applicato al valore potenza Auto 1.' },
+          car2_color: { label: 'Colore Auto 2', helper: 'Colore applicato al valore potenza Auto 2.' },
           header_font_size: { label: 'Dimensione titolo (px)', helper: 'Predefinita 16' },
           daily_label_font_size: { label: 'Dimensione etichetta giornaliera (px)', helper: 'Predefinita 12' },
           daily_value_font_size: { label: 'Dimensione valore giornaliero (px)', helper: 'Predefinita 20' },
@@ -1720,7 +2105,11 @@ class LuminaEnergyCardEditor extends HTMLElement {
           load_font_size: { label: 'Dimensione carico (px)', helper: 'Predefinita 15' },
           grid_font_size: { label: 'Dimensione rete (px)', helper: 'Predefinita 15' },
           car_power_font_size: { label: 'Dimensione potenza auto (px)', helper: 'Predefinita 15' },
-          car_soc_font_size: { label: 'Dimensione SOC auto (px)', helper: 'Predefinita 12' }
+          car2_power_font_size: { label: 'Dimensione potenza Auto 2 (px)', helper: 'Predefinita 15' },
+          car_name_font_size: { label: 'Dimensione nome auto (px)', helper: 'Predefinita come la dimensione potenza auto' },
+          car2_name_font_size: { label: 'Dimensione nome Auto 2 (px)', helper: 'Predefinita come la dimensione potenza Auto 2' },
+          car_soc_font_size: { label: 'Dimensione SOC auto (px)', helper: 'Predefinita 12' },
+          car2_soc_font_size: { label: 'Dimensione SOC Auto 2 (px)', helper: 'Predefinita 12' }
         },
         options: {
           languages: [
@@ -1755,15 +2144,18 @@ class LuminaEnergyCardEditor extends HTMLElement {
           update_interval: { label: 'Aktualisierungsintervall', helper: 'Aktualisierungsfrequenz der Karte (0 deaktiviert das Limit).' },
           animation_speed_factor: { label: 'Animationsgeschwindigkeit', helper: 'Animationsfaktor zwischen -3x und 3x. 0 pausiert, negative Werte kehren den Fluss um.' },
           animation_style: { label: 'Animationsstil', helper: 'Motiv der Flussanimation waehlen (Striche, Punkte oder Pfeile).' },
+          
           sensor_pv_total: { label: 'PV Gesamt Sensor', helper: 'Optionaler aggregierter Sensor fuer die kombinierte Linie.' },
-          sensor_pv1: { label: 'PV Sensor 1 (Pflicht)', helper: 'Primaerer Solarsensor.' },
-          sensor_pv2: { label: 'PV Sensor 2' },
-          sensor_pv3: { label: 'PV Sensor 3' },
-          sensor_pv4: { label: 'PV Sensor 4' },
-          sensor_pv5: { label: 'PV Sensor 5' },
-          sensor_pv6: { label: 'PV Sensor 6' },
+          sensor_pv_total_secondary: { label: 'PV Gesamt Sensor (WR 2)', helper: 'Optionaler zweiter Wechselrichter; wird mit dem PV-Gesamtwert addiert.' },
+          sensor_pv1: { label: 'PV String (Array 1) 1 (Pflicht)', helper: 'Primaerer Solarsensor.' },
+          sensor_pv2: { label: 'PV String (Array 1) 2' },
+          sensor_pv3: { label: 'PV String (Array 1) 3' },
+          sensor_pv4: { label: 'PV String (Array 1) 4' },
+          sensor_pv5: { label: 'PV String (Array 1) 5' },
+          sensor_pv6: { label: 'PV String (Array 1) 6' },
           show_pv_strings: { label: 'PV Strings einzeln anzeigen', helper: 'Gesamte Linie plus jede PV-String-Zeile separat einblenden.' },
           sensor_daily: { label: 'Tagesproduktion Sensor', helper: 'Sensor fuer taegliche Produktionssumme.' },
+          sensor_daily_array2: { label: 'Tagesproduktion Sensor (Array 2)', helper: 'Sensor fuer die taegliche Produktionssumme von Array 2.' },
           sensor_bat1_soc: { label: 'Batterie 1 SOC' },
           sensor_bat1_power: { label: 'Batterie 1 Leistung' },
           sensor_bat2_soc: { label: 'Batterie 2 SOC' },
@@ -1773,12 +2165,23 @@ class LuminaEnergyCardEditor extends HTMLElement {
           sensor_bat4_soc: { label: 'Batterie 4 SOC' },
           sensor_bat4_power: { label: 'Batterie 4 Leistung' },
           sensor_home_load: { label: 'Hausverbrauch', helper: 'Sensor fuer Gesamtverbrauch des Haushalts.' },
-          sensor_grid_power: { label: 'Netzleistung', helper: 'Sensor fuer positiven/negativen Netzfluss.' },
+          sensor_home_load_secondary: { label: 'Hausverbrauch (WR 2)', helper: 'Optionale Hauslast-Entitaet fuer den zweiten Wechselrichter.' },
+          sensor_grid_power: { label: 'Netzleistung', helper: 'Sensor fuer positiven/negativen Netzfluss. Geben Sie entweder diesen Sensor an oder sowohl den Netzimport-Sensor als auch den Netzexport-Sensor.' },
           sensor_grid_import: { label: 'Netzimport Sensor', helper: 'Optionale Entitaet fuer positiven Netzimport.' },
           sensor_grid_export: { label: 'Netzexport Sensor', helper: 'Optionale Entitaet fuer positiven Netzexport.' },
           pv_primary_color: { label: 'PV 1 Flussfarbe', helper: 'Farbe fuer die primaere PV-Animationslinie.' },
+          pv_tot_color: { label: 'PV TOT Farbe', helper: 'Farbe fuer die PV TOT Zeile.' },
           pv_secondary_color: { label: 'PV 2 Flussfarbe', helper: 'Farbe fuer die zweite PV-Linie (falls vorhanden).' },
+          pv_string1_color: { label: 'PV String 1 Farbe', helper: 'Ueberschreibt die Farbe fuer S1. Leer lassen um die PV-Gesamtfarbe zu nutzen.' },
+          pv_string2_color: { label: 'PV String 2 Farbe', helper: 'Ueberschreibt die Farbe fuer S2. Leer lassen um die PV-Gesamtfarbe zu nutzen.' },
+          pv_string3_color: { label: 'PV String 3 Farbe', helper: 'Ueberschreibt die Farbe fuer S3. Leer lassen um die PV-Gesamtfarbe zu nutzen.' },
+          pv_string4_color: { label: 'PV String 4 Farbe', helper: 'Ueberschreibt die Farbe fuer S4. Leer lassen um die PV-Gesamtfarbe zu nutzen.' },
+          pv_string5_color: { label: 'PV String 5 Farbe', helper: 'Ueberschreibt die Farbe fuer S5. Leer lassen um die PV-Gesamtfarbe zu nutzen.' },
+          pv_string6_color: { label: 'PV String 6 Farbe', helper: 'Ueberschreibt die Farbe fuer S6. Leer lassen um die PV-Gesamtfarbe zu nutzen.' },
           load_flow_color: { label: 'Lastflussfarbe', helper: 'Farbe fuer die Hausverbrauch-Animationslinie.' },
+          house_total_color: { label: 'House Total Farbe', helper: 'Farbe fuer HOUSE TOT Text/Fluss.' },
+          inv1_color: { label: 'INV 1 Farbe', helper: 'Farbe fuer INV 1 Text/Fluss.' },
+          inv2_color: { label: 'INV 2 Farbe', helper: 'Farbe fuer INV 2 Text/Fluss.' },
           load_threshold_warning: { label: 'Last Warnschwelle', helper: 'Farbe wechseln, wenn der Verbrauch diese Magnitude erreicht. Verwendet die ausgewaehlte Anzeigeeinheit.' },
           load_warning_color: { label: 'Last Warnfarbe', helper: 'Farbe bei Erreichen der Warnschwelle des Hausverbrauchs.' },
           load_threshold_critical: { label: 'Last Kritische Schwelle', helper: 'Farbe wechseln, wenn der Verbrauch diese kritische Magnitude erreicht. Verwendet die ausgewaehlte Anzeigeeinheit.' },
@@ -1797,10 +2200,20 @@ class LuminaEnergyCardEditor extends HTMLElement {
           grid_threshold_critical: { label: 'Netz Kritische Schwelle', helper: 'Farbe wechseln, wenn diese Magnitude erreicht wird. Verwendet die ausgewaehlte Anzeigeeinheit.' },
           grid_critical_color: { label: 'Netz Kritische Farbe', helper: 'Farbe bei Erreichen der kritischen Schwelle.' },
           invert_grid: { label: 'Netzwerte invertieren', helper: 'Aktivieren, wenn Import/Export vertauscht ist.' },
-          sensor_car_power: { label: 'Fahrzeugleistung Sensor' },
-          sensor_car_soc: { label: 'Fahrzeug SOC Sensor' },
-          show_car_soc: { label: 'Elektrofahrzeug anzeigen' },
+          sensor_car_power: { label: 'Fahrzeugleistung Sensor 1' },
+          sensor_car_soc: { label: 'Fahrzeug SOC Sensor 1' },
+          car1_label: { label: 'Bezeichnung Fahrzeug 1', helper: 'Text neben den Werten des ersten EV.' },
+          sensor_car2_power: { label: 'Fahrzeugleistung Sensor 2' },
+          sensor_car2_soc: { label: 'Fahrzeug SOC Sensor 2' },
+          car2_label: { label: 'Bezeichnung Fahrzeug 2', helper: 'Text neben den Werten des zweiten EV.' },
+          show_car_soc: { label: 'Elektrofahrzeug 1 anzeigen', helper: 'Aktivieren, um die Werte des ersten Fahrzeugs anzuzeigen.' },
+          show_car2: { label: 'Elektrofahrzeug 2 anzeigen', helper: 'Aktivieren und Sensoren zuweisen, um das zweite Fahrzeug zu zeigen.' },
           car_pct_color: { label: 'Farbe fuer SOC', helper: 'Hex Farbe fuer EV SOC Text (z. B. #00FFFF).' },
+          car2_pct_color: { label: 'Farbe SOC Auto 2', helper: 'Hex Farbe fuer SOC Text des zweiten Fahrzeugs (faellt auf Car SOC zurueck).' },
+          car1_name_color: { label: 'Farbe Name Auto 1', helper: 'Farbe fuer die Bezeichnung von Fahrzeug 1.' },
+          car2_name_color: { label: 'Farbe Name Auto 2', helper: 'Farbe fuer die Bezeichnung von Fahrzeug 2.' },
+          car1_color: { label: 'Farbe Auto 1', helper: 'Farbe fuer die Leistungsanzeige von Fahrzeug 1.' },
+          car2_color: { label: 'Farbe Auto 2', helper: 'Farbe fuer die Leistungsanzeige von Fahrzeug 2.' },
           header_font_size: { label: 'Schriftgroesse Titel (px)', helper: 'Standard 16' },
           daily_label_font_size: { label: 'Schriftgroesse Tageslabel (px)', helper: 'Standard 12' },
           daily_value_font_size: { label: 'Schriftgroesse Tageswert (px)', helper: 'Standard 20' },
@@ -1879,7 +2292,8 @@ class LuminaEnergyCardEditor extends HTMLElement {
         { name: 'display_unit', label: fields.display_unit.label, helper: fields.display_unit.helper, selector: { select: { options: optionDefs.display_unit } } },
         { name: 'update_interval', label: fields.update_interval.label, helper: fields.update_interval.helper, selector: { number: { min: 0, max: 60, step: 5, mode: 'slider', unit_of_measurement: 's' } } },
         { name: 'animation_speed_factor', label: fields.animation_speed_factor.label, helper: fields.animation_speed_factor.helper, selector: { number: { min: -3, max: 3, step: 0.25, mode: 'slider', unit_of_measurement: 'x' } } },
-        { name: 'animation_style', label: fields.animation_style.label, helper: fields.animation_style.helper, selector: { select: { options: optionDefs.animation_style } } }
+        { name: 'animation_style', label: fields.animation_style.label, helper: fields.animation_style.helper, selector: { select: { options: optionDefs.animation_style } } },
+        
       ]),
       entities: define([
         { name: 'sensor_pv_total', label: fields.sensor_pv_total.label, helper: fields.sensor_pv_total.helper, selector: entitySelector },
@@ -1899,6 +2313,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
         { name: 'sensor_bat3_power', label: fields.sensor_bat3_power.label, helper: fields.sensor_bat3_power.helper, selector: entitySelector },
         { name: 'sensor_bat4_soc', label: fields.sensor_bat4_soc.label, helper: fields.sensor_bat4_soc.helper, selector: entitySelector },
         { name: 'sensor_bat4_power', label: fields.sensor_bat4_power.label, helper: fields.sensor_bat4_power.helper, selector: entitySelector },
+        { name: 'invert_battery', label: fields.invert_battery.label, helper: fields.invert_battery.helper, selector: { boolean: {} }, default: false },
         { name: 'sensor_home_load', label: fields.sensor_home_load.label, helper: fields.sensor_home_load.helper, selector: entitySelector },
         { name: 'sensor_grid_power', label: fields.sensor_grid_power.label, helper: fields.sensor_grid_power.helper, selector: entitySelector },
         { name: 'sensor_grid_import', label: fields.sensor_grid_import.label, helper: fields.sensor_grid_import.helper, selector: entitySelector },
@@ -1906,12 +2321,27 @@ class LuminaEnergyCardEditor extends HTMLElement {
         { name: 'invert_grid', label: fields.invert_grid.label, helper: fields.invert_grid.helper, selector: { boolean: {} }, default: false },
         { name: 'sensor_car_power', label: fields.sensor_car_power.label, helper: fields.sensor_car_power.helper, selector: entitySelector },
         { name: 'sensor_car_soc', label: fields.sensor_car_soc.label, helper: fields.sensor_car_soc.helper, selector: entitySelector },
-        { name: 'show_car_soc', label: fields.show_car_soc.label, helper: fields.show_car_soc.helper, selector: { boolean: {} }, default: false }
+        { name: 'car1_label', label: fields.car1_label.label, helper: fields.car1_label.helper, selector: { text: {} } },
+        { name: 'sensor_car2_power', label: fields.sensor_car2_power.label, helper: fields.sensor_car2_power.helper, selector: entitySelector },
+        { name: 'sensor_car2_soc', label: fields.sensor_car2_soc.label, helper: fields.sensor_car2_soc.helper, selector: entitySelector },
+        { name: 'car2_label', label: fields.car2_label.label, helper: fields.car2_label.helper, selector: { text: {} } },
+        { name: 'show_car_soc', label: fields.show_car_soc.label, helper: fields.show_car_soc.helper, selector: { boolean: {} }, default: false },
+        { name: 'show_car2', label: fields.show_car2.label, helper: fields.show_car2.helper, selector: { boolean: {} }, default: false }
       ]),
       colors: define([
+        { name: 'pv_tot_color', label: fields.pv_tot_color.label, helper: fields.pv_tot_color.helper, selector: { color_picker: {} }, default: '#00FFFF' },
         { name: 'pv_primary_color', label: fields.pv_primary_color.label, helper: fields.pv_primary_color.helper, selector: { color_picker: {} } },
         { name: 'pv_secondary_color', label: fields.pv_secondary_color.label, helper: fields.pv_secondary_color.helper, selector: { color_picker: {} } },
+        { name: 'pv_string1_color', label: fields.pv_string1_color.label, helper: fields.pv_string1_color.helper, selector: { color_picker: {} } },
+        { name: 'pv_string2_color', label: fields.pv_string2_color.label, helper: fields.pv_string2_color.helper, selector: { color_picker: {} } },
+        { name: 'pv_string3_color', label: fields.pv_string3_color.label, helper: fields.pv_string3_color.helper, selector: { color_picker: {} } },
+        { name: 'pv_string4_color', label: fields.pv_string4_color.label, helper: fields.pv_string4_color.helper, selector: { color_picker: {} } },
+        { name: 'pv_string5_color', label: fields.pv_string5_color.label, helper: fields.pv_string5_color.helper, selector: { color_picker: {} } },
+        { name: 'pv_string6_color', label: fields.pv_string6_color.label, helper: fields.pv_string6_color.helper, selector: { color_picker: {} } },
         { name: 'load_flow_color', label: fields.load_flow_color.label, helper: fields.load_flow_color.helper, selector: { color_picker: {} } },
+        { name: 'house_total_color', label: fields.house_total_color.label, helper: fields.house_total_color.helper, selector: { color_picker: {} }, default: '#00FFFF' },
+        { name: 'inv1_color', label: fields.inv1_color.label, helper: fields.inv1_color.helper, selector: { color_picker: {} }, default: '#0080ff' },
+        { name: 'inv2_color', label: fields.inv2_color.label, helper: fields.inv2_color.helper, selector: { color_picker: {} }, default: '#80ffff' },
         { name: 'load_threshold_warning', label: fields.load_threshold_warning.label, helper: fields.load_threshold_warning.helper, selector: buildThresholdSelector(), default: null },
         { name: 'load_warning_color', label: fields.load_warning_color.label, helper: fields.load_warning_color.helper, selector: { color_picker: {} } },
         { name: 'load_threshold_critical', label: fields.load_threshold_critical.label, helper: fields.load_threshold_critical.helper, selector: buildThresholdSelector(), default: null },
@@ -1930,6 +2360,11 @@ class LuminaEnergyCardEditor extends HTMLElement {
         { name: 'grid_threshold_critical', label: fields.grid_threshold_critical.label, helper: fields.grid_threshold_critical.helper, selector: buildThresholdSelector(), default: null },
         { name: 'grid_critical_color', label: fields.grid_critical_color.label, helper: fields.grid_critical_color.helper, selector: { color_picker: {} } },
         { name: 'car_pct_color', label: fields.car_pct_color.label, helper: fields.car_pct_color.helper, selector: { color_picker: {} }, default: '#00FFFF' }
+        ,{ name: 'car2_pct_color', label: fields.car2_pct_color.label, helper: fields.car2_pct_color.helper, selector: { color_picker: {} }, default: '' }
+        ,{ name: 'car1_name_color', label: fields.car1_name_color.label, helper: fields.car1_name_color.helper, selector: { color_picker: {} }, default: '#FFFFFF' }
+        ,{ name: 'car2_name_color', label: fields.car2_name_color.label, helper: fields.car2_name_color.helper, selector: { color_picker: {} }, default: '#FFFFFF' }
+        ,{ name: 'car1_color', label: fields.car1_color.label, helper: fields.car1_color.helper, selector: { color_picker: {} }, default: '#FFFFFF' }
+        ,{ name: 'car2_color', label: fields.car2_color.label, helper: fields.car2_color.helper, selector: { color_picker: {} }, default: '#FFFFFF' }
       ]),
       typography: define([
         { name: 'header_font_size', label: fields.header_font_size.label, helper: fields.header_font_size.helper, selector: { text: {} } },
@@ -1941,7 +2376,11 @@ class LuminaEnergyCardEditor extends HTMLElement {
         { name: 'load_font_size', label: fields.load_font_size.label, helper: fields.load_font_size.helper, selector: { text: {} } },
         { name: 'grid_font_size', label: fields.grid_font_size.label, helper: fields.grid_font_size.helper, selector: { text: {} } },
         { name: 'car_power_font_size', label: fields.car_power_font_size.label, helper: fields.car_power_font_size.helper, selector: { text: {} } },
-        { name: 'car_soc_font_size', label: fields.car_soc_font_size.label, helper: fields.car_soc_font_size.helper, selector: { text: {} } }
+        { name: 'car2_power_font_size', label: fields.car2_power_font_size.label, helper: fields.car2_power_font_size.helper, selector: { text: {} } },
+        { name: 'car_name_font_size', label: fields.car_name_font_size.label, helper: fields.car_name_font_size.helper, selector: { text: {} } },
+        { name: 'car2_name_font_size', label: fields.car2_name_font_size.label, helper: fields.car2_name_font_size.helper, selector: { text: {} } },
+        { name: 'car_soc_font_size', label: fields.car_soc_font_size.label, helper: fields.car_soc_font_size.helper, selector: { text: {} } },
+        { name: 'car2_soc_font_size', label: fields.car2_soc_font_size.label, helper: fields.car2_soc_font_size.helper, selector: { text: {} } }
       ])
     };
   }
@@ -1949,7 +2388,58 @@ class LuminaEnergyCardEditor extends HTMLElement {
   _createSectionDefs(localeStrings, schemaDefs) {
     const sections = localeStrings.sections;
     return [
-      { id: 'entities', title: sections.entities.title, helper: sections.entities.helper, schema: schemaDefs.entities, defaultOpen: true },
+      {
+        id: 'entities',
+        title: sections.entities.title,
+        helper: sections.entities.helper,
+        defaultOpen: true,
+        renderContent: () => {
+          const wrapper = document.createElement('div');
+          // Render entities form but inject Solar Array 2 before `sensor_bat1_soc`
+          const allEntities = Array.isArray(schemaDefs.entities) ? schemaDefs.entities : [];
+          const splitIndex = allEntities.findIndex((e) => e && e.name === 'sensor_bat1_soc');
+          let before = allEntities;
+          let after = [];
+          if (splitIndex >= 0) {
+            before = allEntities.slice(0, splitIndex);
+            after = allEntities.slice(splitIndex);
+          }
+          // Ensure the original Home Load field appears above the injected Solar Array 2 section
+          if (after && after.length) {
+            const homeIdx = after.findIndex((e) => e && e.name === 'sensor_home_load');
+            if (homeIdx >= 0) {
+              const [homeEntry] = after.splice(homeIdx, 1);
+              before = (before || []).concat([homeEntry]);
+            }
+          }
+          if (before && before.length) wrapper.appendChild(this._createForm(before));
+
+          // Nested collapsible for Solar Array 2
+          const fields = localeStrings.fields;
+          const entitySelector = { entity: { domain: ['sensor', 'input_number'] } };
+          const solarSchema = [
+          { name: 'sensor_pv_total_secondary', label: fields.sensor_pv_total_secondary.label, helper: fields.sensor_pv_total_secondary.helper, selector: entitySelector },
+          { name: 'sensor_pv_array2_1', label: fields.sensor_pv_array2_1.label, helper: fields.sensor_pv_array2_1.helper, selector: entitySelector },
+          { name: 'sensor_pv_array2_2', label: fields.sensor_pv_array2_2.label, helper: fields.sensor_pv_array2_2.helper, selector: entitySelector },
+          { name: 'sensor_pv_array2_3', label: fields.sensor_pv_array2_3.label, helper: fields.sensor_pv_array2_3.helper, selector: entitySelector },
+          { name: 'sensor_pv_array2_4', label: fields.sensor_pv_array2_4.label, helper: fields.sensor_pv_array2_4.helper, selector: entitySelector },
+          { name: 'sensor_pv_array2_5', label: fields.sensor_pv_array2_5.label, helper: fields.sensor_pv_array2_5.helper, selector: entitySelector },
+          { name: 'sensor_pv_array2_6', label: fields.sensor_pv_array2_6.label, helper: fields.sensor_pv_array2_6.helper, selector: entitySelector },
+          { name: 'sensor_daily_array2', label: fields.sensor_daily_array2.label, helper: fields.sensor_daily_array2.helper, selector: entitySelector },
+          { name: 'sensor_home_load_secondary', label: fields.sensor_home_load_secondary.label, helper: fields.sensor_home_load_secondary.helper, selector: entitySelector }
+          ];
+          const solarSection = this._createSection({
+            id: 'solar_array_2',
+            title: (fields.solar_array2_title && fields.solar_array2_title.label) ? fields.solar_array2_title.label : 'Solar Array 2 (Optional)',
+            helper: (fields.solar_array2_title && fields.solar_array2_title.helper) ? fields.solar_array2_title.helper : null,
+            schema: solarSchema,
+            defaultOpen: false
+          });
+          wrapper.appendChild(solarSection);
+          if (after && after.length) wrapper.appendChild(this._createForm(after));
+          return wrapper;
+        }
+      },
       { id: 'colors', title: sections.colors.title, helper: sections.colors.helper, schema: schemaDefs.colors, defaultOpen: false },
       { id: 'typography', title: sections.typography.title, helper: sections.typography.helper, schema: schemaDefs.typography, defaultOpen: false },
       { id: 'general', title: sections.general.title, helper: sections.general.helper, schema: schemaDefs.general, defaultOpen: false },

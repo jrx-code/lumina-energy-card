@@ -144,6 +144,86 @@ background_image: /local/community/lumina-energy-card/lumina_background.jpg
 | `sensor_car_soc` | entity | — | Optional EV SOC sensor |
 | `show_car_soc` | boolean | `false` | Show Electric Vehicle panel (power and SOC) |
 | `car_pct_color` | string | `#00FFFF` | EV SOC text colour |
+| `sensor_pv_total_secondary` | entity | — | Optional second inverter total sensor (PV2) |
+| `sensor_pv_array2_1` | entity | — | PV String 1 (Array 2) |
+| `sensor_pv_array2_2` | entity | — | PV String 2 (Array 2) |
+| `sensor_pv_array2_3` | entity | — | PV String 3 (Array 2) |
+| `sensor_pv_array2_4` | entity | — | PV String 4 (Array 2) |
+| `sensor_pv_array2_5` | entity | — | PV String 5 (Array 2) |
+| `sensor_pv_array2_6` | entity | — | PV String 6 (Array 2) |
+| `sensor_daily_array2` | entity | — | Daily production sensor for Array 2 (combined with `sensor_daily`) |
+| `sensor_home_load_secondary` | entity | — | Optional home load sensor for inverter 2 |
+| `pv_tot_color` | string | `#00FFFF` | Colour applied to the PV TOT text/line |
+| `house_total_color` | string | — | Colour applied to the HOUSE TOT label/flow |
+| `inv1_color` | string | `#0080ff` | Colour applied to INV 1 label/flow |
+| `inv2_color` | string | `#80ffff` | Colour applied to INV 2 label/flow |
+| `car_name_font_size` | number | `15` | Font size for Car name label (px) |
+| `car2_name_font_size` | number | `15` | Font size for Car 2 name label (px) |
+
+### Additional Array 2 & Options (EN)
+
+- `sensor_pv_total_secondary` | entity | — | Optional second inverter total sensor (treated as PV2). When provided it is included in the PV TOT and used as the secondary PV flow.
+- `sensor_pv_array2_1` .. `sensor_pv_array2_6` | entities | — | Up to six per-string sensors for a secondary PV array (Array 2). When `show_pv_strings` is enabled these appear as separate lines under the PV total.
+- `sensor_daily_array2` | entity | — | Daily production sensor for Array 2; the card displays a combined daily yield = `sensor_daily` + `sensor_daily_array2`.
+- `sensor_home_load_secondary` | entity | — | Optional home load/consumption sensor associated with inverter 2; used to compute HOUSE TOT and INV 2 values when Array 2 is configured.
+- `pv_tot_color` | string | `#00FFFF` | Colour applied to the PV TOT text/line (overrides per-string inheritance when set).
+- `house_total_color`, `inv1_color`, `inv2_color` | string | — | Per-line colours applied to HOUSE TOT, INV 1 and INV 2 labels/flows when Array 2 is active.
+- `invert_battery` | boolean | `false` | Flip battery charge/discharge polarity (swap charge/discharge colours and reverse animation direction when enabled).
+Car colours & fonts: `car1_name_color`, `car2_name_color`, `car1_color`, `car2_color`, `car2_pct_color`, `car_name_font_size`, `car2_name_font_size` — new color and name-font-size options for Car 1 and Car 2 (power and SOC font sizes remain available as `car_power_font_size`, `car2_power_font_size`, `car_soc_font_size`, `car2_soc_font_size`).
+
+Notes:
+
+- When Array 2 is active the PV flow mapping is: `pv1` → Array 1 (primary), `pv2` → Array 2 (secondary). The PV TOT line shows the combined production where applicable.
+
+- Enabling `show_pv_strings` will show per-string lines for the active array(s); when Array 2 is present the card will render PV TOT / Array1 total / Array2 total and the HOUSE section will render `HOUSE TOT / INV 1 / INV 2` as separate lines.
+
+### Ulteriori opzioni Array 2 (IT)
+
+`sensor_pv_total_secondary` | entity | — | Sensore totale opzionale per il secondo inverter (trattato come PV2). Quando presente viene sommato al PV TOT e usato come flusso FV secondario.
+
+`sensor_pv_array2_1` .. `sensor_pv_array2_6` | entities | — | Fino a sei sensori per stringa per un secondo array FV (Array 2). Se `show_pv_strings` è abilitato appaiono come linee separate sotto il totale PV.
+
+`sensor_daily_array2` | entity | — | Sensore di produzione giornaliera per Array 2; la scheda mostra il totale giornaliero combinato = `sensor_daily` + `sensor_daily_array2`.
+
+`sensor_home_load_secondary` | entity | — | Sensore opzionale di carico domestico associato all inverter 2; usato per calcolare HOUSE TOT e INV 2 quando Array 2 è configurato.
+
+`pv_tot_color` | string | `#00FFFF` | Colore applicato alla riga/testo PV TOT (sovrascrive l ereditarieta per stringa se impostato).
+
+`house_total_color`, `inv1_color`, `inv2_color` | string | — | Colori per riga applicati a HOUSE TOT, INV 1 e INV 2 quando Array 2 è attivo.
+
+`invert_battery` | boolean | `false` | Inverti la polarita di carica/scarica batteria (scambia i colori e inverte la direzione dell animazione se abilitato).
+
+Opzioni colori/font Auto: `car1_name_color`, `car2_name_color`, `car1_color`, `car2_color`, `car2_pct_color`, `car_name_font_size`, `car2_name_font_size` — nuove opzioni per colori e dimensione del nome Auto 1/2.
+
+Note:
+
+- Quando Array 2 è attivo il mapping dei flussi FV è: `pv1` → Array 1 (primario), `pv2` → Array 2 (secondario). La riga PV TOT mostra la produzione combinata quando disponibile.
+
+- Abilitando `show_pv_strings` verranno mostrate le linee per stringa per gli array attivi; quando Array 2 è presente la scheda renderizzerà PV TOT / Totale Array1 / Totale Array2 e la sezione HOUSE mostrerà `HOUSE TOT / INV 1 / INV 2` come linee separate.
+
+### Zusätzliche Array-2-Optionen (DE)
+
+`sensor_pv_total_secondary` | entity | — | Optionaler Gesamtwertsensor für den zweiten Wechselrichter (als PV2 behandelt). Wenn vorhanden wird er in PV TOT einbezogen und als sekundärer PV-Fluss verwendet.
+
+`sensor_pv_array2_1` .. `sensor_pv_array2_6` | entities | — | Bis zu sechs Einzelstring-Sensoren für ein zweites PV-Array (Array 2). Wenn `show_pv_strings` aktiviert ist, werden diese als separate Zeilen unter der PV-Gesamtlinie angezeigt.
+
+`sensor_daily_array2` | entity | — | Tagesproduktionssensor für Array 2; die Karte zeigt den kombinierten Tagesertrag = `sensor_daily` + `sensor_daily_array2`.
+
+`sensor_home_load_secondary` | entity | — | Optionaler Haushaltsverbrauchssensor, der mit Wechselrichter 2 verbunden ist; wird verwendet, um HOUSE TOT und INV 2 Werte zu berechnen, wenn Array 2 konfiguriert ist.
+
+`pv_tot_color` | string | `#00FFFF` | Farbe für die PV TOT Text-/Linie (überschreibt die Vererbung pro String, wenn gesetzt).
+
+`house_total_color`, `inv1_color`, `inv2_color` | string | — | Zeilenfarben für HOUSE TOT, INV 1 und INV 2, wenn Array 2 aktiv ist.
+
+`invert_battery` | boolean | `false` | Batterie-Lade-/Entladepolarität umkehren (tauscht Lade-/Entladefarben und kehrt die Animationsrichtung um, wenn aktiviert).
+
+Auto-Farben & Schriften: `car1_name_color`, `car2_name_color`, `car1_color`, `car2_color`, `car2_pct_color`, `car_name_font_size`, `car2_name_font_size` — neue Farb- und Namensschriftgröße-Optionen für Auto 1 und Auto 2.
+
+Hinweise:
+
+- Wenn Array 2 aktiv ist, gilt folgende PV-Fluss-Zuordnung: `pv1` → Array 1 (primär), `pv2` → Array 2 (sekundär). Die PV TOT Zeile zeigt die kombinierte Produktion, falls vorhanden.
+
+- Wenn `show_pv_strings` aktiviert ist, werden pro String Zeilen für die aktiven Arrays angezeigt; wenn Array 2 vorhanden ist, rendert die Karte PV TOT / Array1 Gesamt / Array2 Gesamt und der HOUSE-Bereich rendert `HOUSE TOT / INV 1 / INV 2` als separate Zeilen.
 
 ### Background & Troubleshooting (EN)
 
@@ -160,6 +240,7 @@ background_image: /local/community/lumina-energy-card/lumina_background.jpg
 
 ### Changelog (EN)
 
+- **1.1.24 (2025-12-23)** – Added secondary PV Array 2 support (per-array string selectors and `sensor_pv_total_secondary`), combined daily yield (`sensor_daily` + `sensor_daily_array2`), secondary home load (`sensor_home_load_secondary`), `pv_tot_color`, per-line HOUSE/INV colours (`house_total_color`, `inv1_color`, `inv2_color`), `invert_battery` support, new car name font-size options (`car_name_font_size`, `car2_name_font_size`) and corresponding editor schema and localized README entries (EN/IT/DE).
 - **1.1.20 (2025)** – Tuned arrow animation scaling, added grid animation threshold, EV panel toggle, and documentation refresh.
 - **1.1.18 (2025)** – Added selectable flow animation styles (dashes, dots, arrows) and refreshed documentation.
 - **1.1.13 (2025)** – Added smooth flow duration easing with dynamic rate scaling, cleanup guards, and a 0s update interval option for real-time refresh.
@@ -233,6 +314,26 @@ background_image: /local/community/lumina-energy-card/lumina_background.jpg
 - Per uno sfondo personalizzato copia l'immagine nella stessa cartella del JS e aggiorna `background_image`.
 - Imposta `invert_grid: true` se i valori di rete risultano invertiti.
 
+### Opzioni (IT)
+
+| Opzione | Tipo | Predefinito | Note |
+| --- | --- | --- | --- |
+| `sensor_pv_total_secondary` | entity | — | Sensore totale opzionale per il secondo inverter (PV2) |
+| `sensor_pv_array2_1` | entity | — | PV String 1 (Array 2) |
+| `sensor_pv_array2_2` | entity | — | PV String 2 (Array 2) |
+| `sensor_pv_array2_3` | entity | — | PV String 3 (Array 2) |
+| `sensor_pv_array2_4` | entity | — | PV String 4 (Array 2) |
+| `sensor_pv_array2_5` | entity | — | PV String 5 (Array 2) |
+| `sensor_pv_array2_6` | entity | — | PV String 6 (Array 2) |
+| `sensor_daily_array2` | entity | — | Sensore produzione giornaliera per Array 2 (combinato con `sensor_daily`) |
+| `sensor_home_load_secondary` | entity | — | Sensore carico casa opzionale per inverter 2 |
+| `pv_tot_color` | string | `#00FFFF` | Colore applicato alla riga/testo PV TOT |
+| `house_total_color` | string | — | Colore applicato a HOUSE TOT |
+| `inv1_color` | string | `#0080ff` | Colore applicato a INV 1 |
+| `inv2_color` | string | `#80ffff` | Colore applicato a INV 2 |
+| `car_name_font_size` | number | `15` | Dimensione font per il nome auto (px) |
+| `car2_name_font_size` | number | `15` | Dimensione font per il nome Auto 2 (px) |
+
 ---
 
 ## Deutsch
@@ -292,6 +393,26 @@ background_image: /local/community/lumina-energy-card/lumina_background.jpg
 - Pflichtwerte: PV1, Daily, Batterie SOC/Power, Hauslast, Netzleistung.
 - Für eigene Hintergründe Bild neben die JS-Datei kopieren und `background_image` anpassen.
 - Bei invertierten Netz-Werten `invert_grid: true` setzen.
+
+### Optionen (DE)
+
+| Option | Typ | Standard | Hinweise |
+| --- | --- | --- | --- |
+| `sensor_pv_total_secondary` | entity | — | Optionaler Gesamtwertsensor für den zweiten Wechselrichter (PV2) |
+| `sensor_pv_array2_1` | entity | — | PV String 1 (Array 2) |
+| `sensor_pv_array2_2` | entity | — | PV String 2 (Array 2) |
+| `sensor_pv_array2_3` | entity | — | PV String 3 (Array 2) |
+| `sensor_pv_array2_4` | entity | — | PV String 4 (Array 2) |
+| `sensor_pv_array2_5` | entity | — | PV String 5 (Array 2) |
+| `sensor_pv_array2_6` | entity | — | PV String 6 (Array 2) |
+| `sensor_daily_array2` | entity | — | Tagesproduktionssensor für Array 2 (kombiniert mit `sensor_daily`) |
+| `sensor_home_load_secondary` | entity | — | Optionaler Haushaltsverbrauchssensor für Wechselrichter 2 |
+| `pv_tot_color` | string | `#00FFFF` | Farbe angewendet auf die PV TOT Zeile/Text |
+| `house_total_color` | string | — | Farbe angewendet auf HOUSE TOT |
+| `inv1_color` | string | `#0080ff` | Farbe angewendet auf INV 1 |
+| `inv2_color` | string | `#80ffff` | Farbe angewendet auf INV 2 |
+| `car_name_font_size` | number | `15` | Schriftgröße für Fahrzeugname (px) |
+| `car2_name_font_size` | number | `15` | Schriftgröße für Fahrzeugname 2 (px) |
 
 ---
 
