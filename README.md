@@ -10,7 +10,7 @@ Limuna Energy Card repository is <https://github.com/ratava/lumina-energy-card>.
 [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg?style=for-the-badge&logo=paypal)](https://www.paypal.me/giorgiosalierno)
 
 
-**Language / Lingua / Sprache:** [English](#english) | [Italiano](#italiano) | [Deutsch](#deutsch)
+**Language / Lingua / Sprache / Langue:** [English](#english) | [Italiano](#italiano) | [Deutsch](#deutsch) | [Français](#fran%C3%A7ais)
 
 ---
 
@@ -224,6 +224,16 @@ Hinweise:
 - Wenn Array 2 aktiv ist, gilt folgende PV-Fluss-Zuordnung: `pv1` → Array 1 (primär), `pv2` → Array 2 (sekundär). Die PV TOT Zeile zeigt die kombinierte Produktion, falls vorhanden.
 
 - Wenn `show_pv_strings` aktiviert ist, werden pro String Zeilen für die aktiven Arrays angezeigt; wenn Array 2 vorhanden ist, rendert die Karte PV TOT / Array1 Gesamt / Array2 Gesamt und der HOUSE-Bereich rendert `HOUSE TOT / INV 1 / INV 2` als separate Zeilen.
+
+---
+
+## Français
+
+### Aperçu (FR)
+
+La sélection de la langue `Français` est désormais disponible dans l'éditeur. Les traductions complètes en français ne sont pas encore fournies ; lorsque `fr` est sélectionné, l'éditeur utilisera par défaut les chaînes en anglais jusqu'à ce que des traductions françaises soient ajoutées.
+
+Pour l'instant, reportez-vous à la section **English** ci‑dessous pour la documentation complète et les exemples de configuration.
 
 ### Background & Troubleshooting (EN)
 

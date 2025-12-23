@@ -1385,6 +1385,29 @@ class LuminaEnergyCard extends HTMLElement {
         @keyframes wave-slide { 0% { transform: translateX(0); } 100% { transform: translateX(-80px); } }
         .liquid-shape { animation: wave-slide 2s linear infinite; }
         .title-text { fill: #00FFFF; font-weight: 900; font-family: 'Orbitron', sans-serif; text-anchor: middle; letter-spacing: 3px; text-transform: uppercase; }
+        /* Editor helpers */
+        .editor-divider { border: 0; border-top: 1px solid rgba(255,255,255,0.08); margin: 20px 0 10px 0; }
+        /* Visual header for Array 2: use a dedicated class so no styles are inherited */
+        .array2-header { display: block; }
+        .array2-visual-header {
+          font-weight: bold !important;
+          font-size: 1.05em !important;
+          padding: 12px 16px !important;
+          color: var(--primary-color) !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          cursor: default !important;
+          list-style: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        .array2-visual-header + .field-helper { margin: 0 0 12px 16px; color: var(--secondary-text-color); font-size: 0.9em; }
+        /* Ensure no disclosure marker/caret appears on the visual header */
+        .array2-visual-header::after,
+        .array2-visual-header::marker,
+        .array2-visual-header::-webkit-details-marker { content: '' !important; display: none !important; }
       </style>
       <ha-card>
         <svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="width: 100%; height: 100%;">
@@ -1859,7 +1882,7 @@ class LuminaEnergyCard extends HTMLElement {
   }
 
   static get version() {
-    return '1.1.24';
+    return '1.1.25';
   }
 }
 
@@ -1884,7 +1907,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
       en: {
         sections: {
           general: { title: 'General Settings', helper: 'Card metadata, background, language, and update cadence.' },
-          entities: { title: 'Entity Selection', helper: 'Choose the PV, battery, grid, load, and EV entities used by the card.' },
+          entities: { title: 'Entity Selection', helper: 'Choose the PV, battery, grid, load, and EV entities used by the card. Either the PV total sensor or your PV string arrays need to be specified as a minimum.' },
           colors: { title: 'Color & Thresholds', helper: 'Configure grid thresholds and accent colours for flows and EV display.' },
           typography: { title: 'Typography', helper: 'Fine tune the font sizes used across the card.' },
           about: { title: 'About', helper: 'Credits, version, and helpful links.' }
@@ -1900,23 +1923,24 @@ class LuminaEnergyCardEditor extends HTMLElement {
           
           sensor_pv_total: { label: 'PV Total Sensor', helper: 'Optional aggregate production sensor displayed as the combined line.' },
           sensor_pv_total_secondary: { label: 'PV Total Sensor (Inverter 2)', helper: 'Optional second inverter total; added to the PV total when provided.' },
-          sensor_pv1: { label: 'PV String (Array 1) 1 (Required)', helper: 'Primary solar production sensor.' },
-          sensor_pv2: { label: 'PV String (Array 1) 2' },
-          sensor_pv3: { label: 'PV String (Array 1) 3' },
-          sensor_pv4: { label: 'PV String (Array 1) 4' },
-          sensor_pv5: { label: 'PV String (Array 1) 5' },
-          sensor_pv6: { label: 'PV String (Array 1) 6' },
-          solar_array2_title: { label: 'Solar Array 2 (Optional)' },
-          solar_array2_title: { label: 'Array Solare 2 (Opzionale)' },
-          solar_array2_title: { label: 'Solar Array 2 (Optional)' },
+          sensor_pv1: { label: 'PV String 1 (Array 1)', helper: 'Primary solar production sensor.' },
+          sensor_pv2: { label: 'PV String 2 (Array 1)' },
+          sensor_pv3: { label: 'PV String 3 (Array 1)' },
+          sensor_pv4: { label: 'PV String 4 (Array 1)' },
+          sensor_pv5: { label: 'PV String 5 (Array 1)' },
+          sensor_pv6: { label: 'PV String 6 (Array 1)' },
+          solar_array2_title: { label: 'Array 2 (Optional)' },
           sensor_pv_array2_1: { label: 'PV String 1 (Array 2)', helper: 'Array 2 solar production sensor.' },
           sensor_pv_array2_2: { label: 'PV String 2 (Array 2)', helper: 'Array 2 solar production sensor.' },
           sensor_pv_array2_3: { label: 'PV String 3 (Array 2)', helper: 'Array 2 solar production sensor.' },
           sensor_pv_array2_4: { label: 'PV String 4 (Array 2)', helper: 'Array 2 solar production sensor.' },
           sensor_pv_array2_5: { label: 'PV String 5 (Array 2)', helper: 'Array 2 solar production sensor.' },
           sensor_pv_array2_6: { label: 'PV String 6 (Array 2)', helper: 'Array 2 solar production sensor.' },
+          solar_array2_activation_helper: { label: 'Wenn der PV-Gesamt-Sensor (WR 2) gesetzt ist oder die PV-String-Werte angegeben sind, wird Array 2 aktiviert und der zweite Wechselrichter eingeschaltet. Sie m\u00fcssen au\u00dferdem den Tagesproduktionssensor (Array 2) und den Hausverbrauch (WR 2) aktivieren.' },
+          solar_array2_activation_helper: { label: 'Se \u00e8 impostato il Sensore PV Totale (Inverter 2) o sono forniti i valori delle stringhe PV, Array 2 diventer\u00e0 attivo e abiliter\u00e0 il secondo inverter. \u00c8 inoltre necessario abilitare il Sensore produzione giornaliera (Array 2) e Carico casa (Inverter 2).' },
+          solar_array2_activation_helper: { label: 'If PV Total Sensor (Inverter 2) is set or the PV String values are provided, Array 2 will become active and enable the second inverter. You must also enable Daily Production Sensor (Array 2) and Home Load (Inverter 2).' },
           show_pv_strings: { label: 'Show Individual PV Strings', helper: 'Toggle to display the total plus each PV string on separate lines.' },
-          sensor_daily: { label: 'Daily Production Sensor', helper: 'Sensor reporting daily production totals.' },
+          sensor_daily: { label: 'Daily Production Sensor (Required)', helper: 'Sensor reporting daily production totals. Either the PV total sensor or your PV string arrays need to be specified as a minimum.' },
           sensor_daily_array2: { label: 'Daily Production Sensor (Array 2)', helper: 'Sensor reporting daily production totals for Array 2.' },
           sensor_bat1_soc: { label: 'Battery 1 SOC' },
           sensor_bat1_power: { label: 'Battery 1 Power' },
@@ -1926,7 +1950,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
           sensor_bat3_power: { label: 'Battery 3 Power' },
           sensor_bat4_soc: { label: 'Battery 4 SOC' },
           sensor_bat4_power: { label: 'Battery 4 Power' },
-          sensor_home_load: { label: 'Home Load/Consumption', helper: 'Total household consumption sensor.' },
+          sensor_home_load: { label: 'Home Load/Consumption (Required)', helper: 'Total household consumption sensor.' },
           sensor_home_load_secondary: { label: 'Home Load (Inverter 2)', helper: 'Optional house load sensor for the second inverter.' },
           sensor_grid_power: { label: 'Grid Power', helper: 'Positive/negative grid flow sensor. Specify either this sensor or both Grid Import Sensor and Grid Export Sensor.' },
           sensor_grid_import: { label: 'Grid Import Sensor', helper: 'Optional entity reporting grid import (positive) power.' },
@@ -1996,7 +2020,8 @@ class LuminaEnergyCardEditor extends HTMLElement {
           languages: [
             { value: 'en', label: 'English' },
             { value: 'it', label: 'Italiano' },
-            { value: 'de', label: 'Deutsch' }
+            { value: 'de', label: 'Deutsch' },
+            { value: 'fr', label: 'Français' }
           ],
           display_units: [
             { value: 'W', label: 'Watts (W)' },
@@ -2012,7 +2037,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
       it: {
         sections: {
           general: { title: 'Impostazioni generali', helper: 'Titolo scheda, sfondo, lingua e frequenza di aggiornamento.' },
-          entities: { title: 'Selezione entita', helper: 'Scegli le entita PV, batteria, rete, carico ed EV utilizzate dalla scheda.' },
+          entities: { title: 'Selezione entita', helper: 'Scegli le entita PV, batteria, rete, carico ed EV utilizzate dalla scheda. Come minimo deve essere specificato il sensore PV totale oppure gli array di stringhe PV.' },
           colors: { title: 'Colori e soglie', helper: 'Configura soglie della rete e colori di accento per i flussi.' },
           typography: { title: 'Tipografia', helper: 'Regola le dimensioni dei caratteri utilizzate nella scheda.' },
           about: { title: 'Informazioni', helper: 'Crediti, versione e link utili.' }
@@ -2028,14 +2053,15 @@ class LuminaEnergyCardEditor extends HTMLElement {
           
           sensor_pv_total: { label: 'Sensore PV totale', helper: 'Sensore aggregato opzionale mostrato come linea combinata.' },
           sensor_pv_total_secondary: { label: 'Sensore PV totale (Inverter 2)', helper: 'Secondo sensore inverter opzionale; viene sommato al totale PV.' },
-          sensor_pv1: { label: 'PV String (Array 1) 1 (obbligatorio)', helper: 'Sensore principale di produzione solare.' },
-          sensor_pv2: { label: 'PV String (Array 1) 2' },
-          sensor_pv3: { label: 'PV String (Array 1) 3' },
-          sensor_pv4: { label: 'PV String (Array 1) 4' },
-          sensor_pv5: { label: 'PV String (Array 1) 5' },
-          sensor_pv6: { label: 'PV String (Array 1) 6' },
+          sensor_pv1: { label: 'PV String 1 (Array 1)', helper: 'Sensore principale di produzione solare.' },
+          sensor_pv2: { label: 'PV String 2 (Array 1)' },
+          sensor_pv3: { label: 'PV String 3 (Array 1)' },
+          sensor_pv4: { label: 'PV String 4 (Array 1)' },
+          sensor_pv5: { label: 'PV String 5 (Array 1)' },
+          sensor_pv6: { label: 'PV String 6 (Array 1)' },
+          solar_array2_title: { label: 'Array 2 (Opzionale)' },
           show_pv_strings: { label: 'Mostra stringhe PV', helper: 'Attiva per mostrare la linea totale piu ogni stringa PV separata.' },
-          sensor_daily: { label: 'Sensore produzione giornaliera', helper: 'Sensore che riporta la produzione giornaliera.' },
+          sensor_daily: { label: 'Sensore produzione giornaliera (Obbligatorio)', helper: 'Sensore che riporta la produzione giornaliera. Come minimo deve essere specificato il sensore PV totale oppure gli array di stringhe PV.' },
           sensor_daily_array2: { label: 'Sensore produzione giornaliera (Array 2)', helper: 'Sensore che riporta la produzione giornaliera per l Array 2.' },
           sensor_bat1_soc: { label: 'Batteria 1 SOC' },
           sensor_bat1_power: { label: 'Batteria 1 potenza' },
@@ -2045,7 +2071,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
           sensor_bat3_power: { label: 'Batteria 3 potenza' },
           sensor_bat4_soc: { label: 'Batteria 4 SOC' },
           sensor_bat4_power: { label: 'Batteria 4 potenza' },
-          sensor_home_load: { label: 'Carico casa/consumo', helper: 'Sensore del consumo totale dell abitazione.' },
+          sensor_home_load: { label: 'Carico casa/consumo (Obbligatorio)', helper: 'Sensore del consumo totale dell abitazione.' },
           sensor_home_load_secondary: { label: 'Carico casa (Inverter 2)', helper: 'Sensore opzionale del carico domestico per il secondo inverter.' },
           sensor_grid_power: { label: 'Potenza rete', helper: 'Sensore flusso rete positivo/negativo. Specificare o questo sensore o entrambi il Sensore import rete e il Sensore export rete.' },
           sensor_grid_import: { label: 'Sensore import rete', helper: 'Entita opzionale che riporta la potenza di import.' },
@@ -2115,7 +2141,8 @@ class LuminaEnergyCardEditor extends HTMLElement {
           languages: [
             { value: 'en', label: 'Inglese' },
             { value: 'it', label: 'Italiano' },
-            { value: 'de', label: 'Tedesco' }
+            { value: 'de', label: 'Tedesco' },
+            { value: 'fr', label: 'Francese' }
           ],
           display_units: [
             { value: 'W', label: 'Watt (W)' },
@@ -2131,7 +2158,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
       de: {
         sections: {
           general: { title: 'Allgemeine Einstellungen', helper: 'Kartentitel, Hintergrund, Sprache und Aktualisierungsintervall.' },
-          entities: { title: 'Entitaetenauswahl', helper: 'PV-, Batterie-, Netz-, Verbrauchs- und optionale EV-Entitaeten waehlen.' },
+          entities: { title: 'Entitaetenauswahl', helper: 'PV-, Batterie-, Netz-, Verbrauchs- und optionale EV-Entitaeten waehlen. Entweder der PV-Gesamt-Sensor oder Ihre PV-String-Arrays muessen mindestens angegeben werden.' },
           colors: { title: 'Farben & Schwellwerte', helper: 'Grenzwerte und Farben fuer Netz- und EV-Anzeige einstellen.' },
           typography: { title: 'Typografie', helper: 'Schriftgroessen der Karte feinjustieren.' },
           about: { title: 'Info', helper: 'Credits, Version und nuetzliche Links.' }
@@ -2147,14 +2174,15 @@ class LuminaEnergyCardEditor extends HTMLElement {
           
           sensor_pv_total: { label: 'PV Gesamt Sensor', helper: 'Optionaler aggregierter Sensor fuer die kombinierte Linie.' },
           sensor_pv_total_secondary: { label: 'PV Gesamt Sensor (WR 2)', helper: 'Optionaler zweiter Wechselrichter; wird mit dem PV-Gesamtwert addiert.' },
-          sensor_pv1: { label: 'PV String (Array 1) 1 (Pflicht)', helper: 'Primaerer Solarsensor.' },
-          sensor_pv2: { label: 'PV String (Array 1) 2' },
-          sensor_pv3: { label: 'PV String (Array 1) 3' },
-          sensor_pv4: { label: 'PV String (Array 1) 4' },
-          sensor_pv5: { label: 'PV String (Array 1) 5' },
-          sensor_pv6: { label: 'PV String (Array 1) 6' },
+          sensor_pv1: { label: 'PV String 1 (Array 1)', helper: 'Primaerer Solarsensor.' },
+          sensor_pv2: { label: 'PV String 2 (Array 1)' },
+          sensor_pv3: { label: 'PV String 3 (Array 1)' },
+          sensor_pv4: { label: 'PV String 4 (Array 1)' },
+          sensor_pv5: { label: 'PV String 5 (Array 1)' },
+          sensor_pv6: { label: 'PV String 6 (Array 1)' },
+          solar_array2_title: { label: 'Array 2 (Optional)' },
           show_pv_strings: { label: 'PV Strings einzeln anzeigen', helper: 'Gesamte Linie plus jede PV-String-Zeile separat einblenden.' },
-          sensor_daily: { label: 'Tagesproduktion Sensor', helper: 'Sensor fuer taegliche Produktionssumme.' },
+          sensor_daily: { label: 'Tagesproduktion Sensor (Erforderlich)', helper: 'Sensor fuer taegliche Produktionssumme. Entweder der PV-Gesamt-Sensor oder Ihre PV-String-Arrays muessen mindestens angegeben werden.' },
           sensor_daily_array2: { label: 'Tagesproduktion Sensor (Array 2)', helper: 'Sensor fuer die taegliche Produktionssumme von Array 2.' },
           sensor_bat1_soc: { label: 'Batterie 1 SOC' },
           sensor_bat1_power: { label: 'Batterie 1 Leistung' },
@@ -2164,7 +2192,7 @@ class LuminaEnergyCardEditor extends HTMLElement {
           sensor_bat3_power: { label: 'Batterie 3 Leistung' },
           sensor_bat4_soc: { label: 'Batterie 4 SOC' },
           sensor_bat4_power: { label: 'Batterie 4 Leistung' },
-          sensor_home_load: { label: 'Hausverbrauch', helper: 'Sensor fuer Gesamtverbrauch des Haushalts.' },
+          sensor_home_load: { label: 'Hausverbrauch (Erforderlich)', helper: 'Sensor fuer Gesamtverbrauch des Haushalts.' },
           sensor_home_load_secondary: { label: 'Hausverbrauch (WR 2)', helper: 'Optionale Hauslast-Entitaet fuer den zweiten Wechselrichter.' },
           sensor_grid_power: { label: 'Netzleistung', helper: 'Sensor fuer positiven/negativen Netzfluss. Geben Sie entweder diesen Sensor an oder sowohl den Netzimport-Sensor als auch den Netzexport-Sensor.' },
           sensor_grid_import: { label: 'Netzimport Sensor', helper: 'Optionale Entitaet fuer positiven Netzimport.' },
@@ -2230,7 +2258,8 @@ class LuminaEnergyCardEditor extends HTMLElement {
           languages: [
             { value: 'en', label: 'Englisch' },
             { value: 'it', label: 'Italienisch' },
-            { value: 'de', label: 'Deutsch' }
+            { value: 'de', label: 'Deutsch' },
+            { value: 'fr', label: 'Französisch' }
           ],
           display_units: [
             { value: 'W', label: 'Watt (W)' },
@@ -2242,7 +2271,8 @@ class LuminaEnergyCardEditor extends HTMLElement {
             { value: 'arrows', label: 'Pfeile' }
           ]
         }
-      }
+      },
+      fr: {},
     };
   }
 
@@ -2437,14 +2467,36 @@ class LuminaEnergyCardEditor extends HTMLElement {
           { name: 'sensor_daily_array2', label: fields.sensor_daily_array2.label, helper: fields.sensor_daily_array2.helper, selector: entitySelector },
           { name: 'sensor_home_load_secondary', label: fields.sensor_home_load_secondary.label, helper: fields.sensor_home_load_secondary.helper, selector: entitySelector }
           ];
-          const solarSection = this._createSection({
-            id: 'solar_array_2',
-            title: (fields.solar_array2_title && fields.solar_array2_title.label) ? fields.solar_array2_title.label : 'Solar Array 2 (Optional)',
-            helper: (fields.solar_array2_title && fields.solar_array2_title.helper) ? fields.solar_array2_title.helper : null,
-            schema: solarSchema,
-            defaultOpen: false
-          });
-          wrapper.appendChild(solarSection);
+          // Inline Solar Array 2 fields (remove collapsible section)
+          // Insert visual divider between Home Load and PV Total (Inverter 2)
+          const divider = document.createElement('hr');
+          divider.className = 'editor-divider';
+          wrapper.appendChild(divider);
+          // Localized header for Array 2
+          const array2Header = document.createElement('div');
+          array2Header.className = 'array2-header array2-visual-header';
+          array2Header.textContent = (fields.solar_array2_title && fields.solar_array2_title.label) ? fields.solar_array2_title.label : 'Array 2 (Optional)';
+          // Force visual parity via inline styles to beat external theme overrides
+          array2Header.style.setProperty('color', 'var(--primary-color)', 'important');
+          array2Header.style.setProperty('padding', '12px 16px', 'important');
+          array2Header.style.setProperty('font-weight', '700', 'important');
+          wrapper.appendChild(array2Header);
+          if (fields.solar_array2_title && fields.solar_array2_title.helper) {
+            const array2Helper = document.createElement('div');
+            array2Helper.className = 'field-helper';
+            array2Helper.textContent = fields.solar_array2_title.helper;
+            wrapper.appendChild(array2Helper);
+          }
+          // Informational helper about activation requirements for Array 2
+          const array2ActivationHelper = document.createElement('div');
+          array2ActivationHelper.className = 'field-helper';
+          array2ActivationHelper.textContent = (fields.solar_array2_activation_helper && fields.solar_array2_activation_helper.label)
+            ? fields.solar_array2_activation_helper.label
+            : 'If PV Total Sensor (Inverter 2) is set or the PV String values are provided, Array 2 will become active and enable the second inverter. You must also enable Daily Production Sensor (Array 2) and Home Load (Inverter 2).';
+          wrapper.appendChild(array2ActivationHelper);
+          if (solarSchema && solarSchema.length) {
+            wrapper.appendChild(this._createForm(solarSchema));
+          }
           if (after && after.length) wrapper.appendChild(this._createForm(after));
           return wrapper;
         }
