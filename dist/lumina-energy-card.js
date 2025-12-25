@@ -182,7 +182,7 @@ class LuminaEnergyCard extends HTMLElement {
     return {
       language: 'en',
       card_title: '',
-      background_image: '/local/community/lumina-energy-card/lumina_background.jpg',
+      background_image: '/local/community/lumina-energy-card/lumina_background-hvac.png',
       header_font_size: 16,
       daily_label_font_size: 12,
       daily_value_font_size: 20,
